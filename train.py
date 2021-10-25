@@ -15,7 +15,7 @@ from utils import LABELS
 from models.prescription_pill import PrescriptionPill
 import config as CFG
 
-def build_loaders(files):
+def build_loaders(files, mode="train"):
     """[Build Loader]
 
     Args:
@@ -24,7 +24,7 @@ def build_loaders(files):
     Returns:
         [DataLoader]
     """
-    dataset = PrescriptionPillData(files)
+    dataset = PrescriptionPillData(files, mode)
     dataloader = DataLoader(
         dataset, 
         batch_size=args.batch_size, 
@@ -65,7 +65,6 @@ def train(model, train_loader, optimizer, criterion, lr_scheduler, epoch, log_wr
             lr_scheduler.step()
 
     train_loss /= len(train_loader)
-    print("Train Loss:", train_loss.item())
     if log_writer:
         log_writer.add_scalar('train/loss', loss, epoch)
     return train_loss
@@ -80,7 +79,6 @@ def val(model, val_loader, criterion, epoch, metric, log_writer):
         with torch.no_grad():
             output, loss_graph_images = model(data)
             val_loss += (criterion(output, data.y) + loss_graph_images).item()
-
             # get the index of the max log-probability
             pred = output.data.max(1, keepdim=True)[1]
             metric.update(pred, data.y.data.view_as(pred))
@@ -108,15 +106,21 @@ def main(args):
         torch.cuda.manual_seed(args.seed)
     
     train_files = glob.glob(args.train_folder + "*.json")
+    
+    # TODO: change path to VAL folder 
+    val_files = glob.glob(args.train_folder + "*.json")
     print(f"Number of Training set: {len(train_files)}")
     
-    train_loader = build_loaders(train_files)
+    train_loader = build_loaders(train_files, mode="train")
+
+    # TODO: Change mode to test 
+    val_loader = build_loaders(val_files, mode="train")
 
     model = PrescriptionPill()
     if args.cuda:
         model.cuda()
     
-    class_weights = torch.FloatTensor([2.0, 1.5, 1.0, 1.0,1.0, 0.2]).cuda()
+    class_weights = torch.FloatTensor([2.0, 1.5, 1.0, 1.0, 1.0, 0.2]).cuda()
     criterion = torch.nn.NLLLoss(weight=class_weights)
 
     # Define optimizer.
@@ -133,31 +137,30 @@ def main(args):
     for epoch in range(1, args.epochs + 1):
         train_loss = train(model, train_loader, optimizer, criterion, lr_scheduler, epoch, log_writer)
         
-        # TODO
-        # val_loss = loss(model, val_loader, criterion, epoch, metric, log_writer)
+        val_loss = val(model, val_loader, criterion, epoch, metric, log_writer)
 
-        # print('Train Epoch: {} \tTrain Loss: {:.6f} \tValidation Loss: {:.6f} \tLearning rate: {}'.format(
-        #     epoch, train_loss, val_loss))
-        # if args.save_interval > 0:
-        #     if val_loss < best_loss or best_loss < 0:
-        #         best_loss = val_loss
-        #         print(f"Saving best model, loss: {best_loss}")
-        #         torch.save(model, os.path.join(
-        #             args.save_folder, "model_best.pth"))
-        #         continue
-        #     if epoch % args.save_interval == 0:
-        #         print(f"Saving at epoch: {epoch}")
-        #         torch.save(model, os.path.join(
-        #             args.save_folder, f"model_{epoch}.pth"))
-        break
+        print('Train Epoch: {} \tTrain Loss: {:.6f} \tValidation Loss: {:.6f} \t'.format(
+            epoch, train_loss, val_loss))
+
+        if args.save_interval > 0:
+            if val_loss < best_loss or best_loss < 0:
+                best_loss = val_loss
+                print(f"Saving best model, loss: {best_loss}")
+                torch.save(model, os.path.join(
+                    args.save_folder, "model_best.pth"))
+                continue
+            if epoch % args.save_interval == 0:
+                print(f"Saving at epoch: {epoch}")
+                torch.save(model, os.path.join(
+                    args.save_folder, f"model_{epoch}.pth"))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch BERT-GCN')
     
-    parser.add_argument('--batch-size', type=int, default=1, metavar='N',
+    parser.add_argument('--batch-size', type=int, default=2, metavar='N',
                         help='input batch size for training (default: 1)')
-    parser.add_argument('--val-batch-size', type=int, default=1, metavar='N',
+    parser.add_argument('--val-batch-size', type=int, default=2, metavar='N',
                         help='input batch size for validation (default: 4)')
 
     parser.add_argument('--train-folder', type=str,
@@ -171,8 +174,9 @@ if __name__ == '__main__':
                         default="logs/runs/",
                         help='TensorBoard folder path')    
 
-    parser.add_argument('--epochs', type=int, default=1, metavar='N',
+    parser.add_argument('--epochs', type=int, default=10, metavar='N',
                         help='number of epochs to train (default: 10)')
+
     parser.add_argument('--lr', type=float, default=5e-5, metavar='LR',
                         help='learning rate (default: 5e-5)')
     parser.add_argument('--num-warmup-steps', type=float, default=1000, metavar='N',

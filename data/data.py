@@ -20,16 +20,17 @@ import config as CFG
 
 
 class PrescriptionPillData(Dataset):
-    def __init__(self, json_files, bert_model="roberta-base"):
+    def __init__(self, json_files, mode, bert_model="roberta-base"):
         """
         Args:
             json_files: list of label json file paths
         """
         self.tokenizer = RobertaTokenizer.from_pretrained(bert_model)
         self.json_files = json_files
+        self.mode = mode
         self.transforms = get_transforms()
 
-    def connect(self, bboxes, imgw, imgh):
+    def connect(self, bboxes, imgw, imgh, img_folder_name):
         G = nx.Graph()
         for src_idx, src_row in enumerate(bboxes):
             src_row['label'] = src_row['label'].lower()
@@ -42,11 +43,10 @@ class PrescriptionPillData(Dataset):
                 # TODO: Update for multi load image
                 # Get only 1 file
                 img_files = src_row['img'][0]
-                image = cv2.imread(f"{CFG.image_path}/{img_files}")
+                image = cv2.imread(f"{CFG.image_path}/{self.mode}/{img_folder_name}/{img_files}")
                 image = self.transforms(image=image)['image']
                 img = torch.tensor(image).permute(2, 0, 1).float()
 
-            # TODO: Change y 
             src_row['y'] = torch.tensor([LABELS.index(src_row['label'])], dtype=torch.long)
 
             src_row["x_min"], src_row["y_min"], src_row["x_max"], src_row["y_max"] = src_row["box"]
@@ -130,13 +130,14 @@ class PrescriptionPillData(Dataset):
             with open(self.json_files[idx], "r") as f:
                 raw = json.load(f)
                 f.close()
+                filename = str(self.json_files[idx]).split('/')[-1].split('.')[0]
         else:
             # TODO: CHECK IT LATER 
             # raw = self.json_files[idx]["anno"]
             pass
 
         G = self.connect(bboxes=raw,
-                         imgw=2000, imgh=2000)
+                         imgw=2000, imgh=2000, img_folder_name=filename)
         
         # For Draw Graph IMG 
         # nx.draw(G,node_size= 20, with_labels = True)

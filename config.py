@@ -5,7 +5,7 @@ cuda = 2
 graph_embedding = 256
 
 # image size
-image_path = 'data/pills/train/01'
+image_path = 'data/pills'
 depth = 3 # RGB Image
 size = 224
 model_name = 'resnet50'
