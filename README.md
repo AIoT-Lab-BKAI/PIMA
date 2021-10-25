@@ -1,4 +1,3 @@
 # EMED-Prescription-and-Pill-matching
 
-- [ ] Đọc dữ liệu
-
+- [ ] Đọc dữ liệu với nhiều ảnh
