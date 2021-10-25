@@ -50,27 +50,51 @@ def train(model, train_loader, optimizer, criterion, lr_scheduler, epoch, log_wr
     """
 
     model.train()
-    train_loss = 0.
+    train_loss, extractLoss, pillPrescriptionLoss = 0., 0., 0.
 
     with tqdm(train_loader, desc=f"Train Epoch {epoch}") as train_bar:
         for batch_idx, data in enumerate(train_bar):
             if args.cuda:
                 data = data.cuda()
             optimizer.zero_grad()
-            output, loss_graph_images = model(data)
-            loss = criterion(output, data.y) + loss_graph_images
-            train_loss += loss
+            
+            graph_extract, pill_prescription_loss = model(data)
+            # KIE Loss
+            extract_loss = criterion(graph_extract, data.y) 
+
+            loss = extract_loss + pill_prescription_loss
             loss.backward()
             optimizer.step()
             lr_scheduler.step()
 
+            train_loss += loss
+            extractLoss += extract_loss
+            pillPrescriptionLoss += pill_prescription_loss
+
+
     train_loss /= len(train_loader)
+    extractLoss /= len(train_loader)
+    pillPrescriptionLoss /= len(train_loader)
+
     if log_writer:
         log_writer.add_scalar('train/loss', loss, epoch)
-    return train_loss
+    return train_loss, extractLoss, pillPrescriptionLoss
 
 
 def val(model, val_loader, criterion, epoch, metric, log_writer):
+    """[summary]
+
+    Args:
+        model ([type]): [description]
+        val_loader ([type]): [description]
+        criterion ([type]): [description]
+        epoch ([type]): [description]
+        metric ([type]): [description]
+        log_writer ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """
     model.eval()
     val_loss = 0.
     for data in tqdm(val_loader, desc="Validation"):
@@ -135,12 +159,12 @@ def main(args):
     log_writer = SummaryWriter(args.log_dir)
 
     for epoch in range(1, args.epochs + 1):
-        train_loss = train(model, train_loader, optimizer, criterion, lr_scheduler, epoch, log_writer)
+        train_loss, extractLoss, pillPrescriptionLoss = train(model, train_loader, optimizer, criterion, lr_scheduler, epoch, log_writer)
         
         val_loss = val(model, val_loader, criterion, epoch, metric, log_writer)
 
-        print('Train Epoch: {} \tTrain Loss: {:.6f} \tValidation Loss: {:.6f} \t'.format(
-            epoch, train_loss, val_loss))
+        print('Train Epoch: {} \nTrain Loss: {:.6f} \tExtract Loss: {:.6f} \tPill Prescription Loss: {:.6f} \nValidation Loss: {:.6f} \t'.format(
+            epoch, train_loss, extractLoss, pillPrescriptionLoss, val_loss))
 
         if args.save_interval > 0:
             if val_loss < best_loss or best_loss < 0:

@@ -43,13 +43,13 @@ class PrescriptionPill(nn.Module):
         
         images_loss = cross_entropy(logits, targets, reduction='none') 
         graph_loss = cross_entropy(logits.T, targets.T, reduction='none') 
-        loss_graph_images = (images_loss + graph_loss) / 2.0
+        pill_prescription_loss = (images_loss + graph_loss) / 2.0
 
         # For graph KIE 
         graph_extract = self.post_process_layers(graph_features)
         graph_extract = F.log_softmax(graph_extract, dim=1)
 
-        return graph_extract, loss_graph_images.mean()
+        return graph_extract, pill_prescription_loss.mean()
 
 def cross_entropy(preds, targets, reduction='none'):
     log_softmax = nn.LogSoftmax(dim=-1)
