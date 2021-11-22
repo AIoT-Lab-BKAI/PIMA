@@ -126,19 +126,22 @@ def main(args):
     torch.manual_seed(args.seed)
     if args.cuda:
         # Set cuda device 
-        torch.cuda.set_device(CFG.cuda)
+        # device = "cuda"
+        torch.device("cuda")
+        # torch.cuda.set_device()
         torch.cuda.manual_seed(args.seed)
-    
+
+    # Load data
     train_files = glob.glob(args.train_folder + "*.json")
-    
-    # TODO: change path to VAL folder 
-    val_files = glob.glob(args.train_folder + "*.json")
-    print(f"Number of Training set: {len(train_files)}")
-    
     train_loader = build_loaders(train_files, mode="train")
 
-    # TODO: Change mode to test 
-    val_loader = build_loaders(val_files, mode="train")
+    val_files = glob.glob(args.val_folder + "*.json")
+    val_loader = build_loaders(val_files, mode="test")
+
+    # Print data information
+    print("Train files: ", len(train_files))
+    print("Val files: ", len(val_files))
+
 
     model = PrescriptionPill()
     if args.cuda:
@@ -182,23 +185,21 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch BERT-GCN')
     
-    parser.add_argument('--batch-size', type=int, default=2, metavar='N',
-                        help='input batch size for training (default: 1)')
-    parser.add_argument('--val-batch-size', type=int, default=2, metavar='N',
-                        help='input batch size for validation (default: 4)')
+    parser.add_argument('--batch-size', type=int, default=2, metavar='N')
+    parser.add_argument('--val-batch-size', type=int, default=2, metavar='N')
 
     parser.add_argument('--train-folder', type=str,
                         default="data/prescriptions/train/",
                         help='training folder path')
     parser.add_argument('--val-folder', type=str,
-                        default="data/prescriptions/val/",
+                        default="data/prescriptions/test/",
                         help='validation folder path')
 
     parser.add_argument('--log-dir', type=str,
                         default="logs/runs/",
                         help='TensorBoard folder path')    
 
-    parser.add_argument('--epochs', type=int, default=10, metavar='N',
+    parser.add_argument('--epochs', type=int, default=50, metavar='N',
                         help='number of epochs to train (default: 10)')
 
     parser.add_argument('--lr', type=float, default=5e-5, metavar='LR',

@@ -3,20 +3,19 @@ import string
 import os.path as osp
 import networkx as nx
 import numpy as np
-import math
-import os
-import matplotlib.pyplot as plt
+import random
 import torch
 from torch_geometric.data import Dataset
 from torch_geometric.utils.convert import from_networkx
 from transformers import RobertaTokenizer
 from genericpath import isfile
-
+import glob
 import albumentations as A
-import cv2
-
 from utils import LABELS
 import config as CFG
+
+import os
+import cv2
 
 
 class PrescriptionPillData(Dataset):
@@ -30,7 +29,7 @@ class PrescriptionPillData(Dataset):
         self.mode = mode
         self.transforms = get_transforms()
 
-    def connect(self, bboxes, imgw, imgh, img_folder_name):
+    def connect(self, bboxes, imgw, imgh, jsonFileName):
         G = nx.Graph()
         for src_idx, src_row in enumerate(bboxes):
             src_row['label'] = src_row['label'].lower()
@@ -38,14 +37,25 @@ class PrescriptionPillData(Dataset):
             if not src_row['label']:
                 src_row['label'] = "other"
             
-            img = torch.zeros_like(torch.empty(CFG.depth, CFG.size, CFG.size))
+            image = torch.zeros_like(torch.empty(CFG.depth, CFG.size, CFG.size))
+            matching_label = torch.tensor(0, dtype=torch.long)
             if src_row['label'] == 'drugname':
-                # TODO: Update for multi load image
-                # Get only 1 file
-                img_files = src_row['img'][0]
-                image = cv2.imread(f"{CFG.image_path}/{self.mode}/{img_folder_name}/{img_files}")
+                matching_label = torch.tensor(1, dtype=torch.long)
+                imgFolderName = src_row['mapping']
+                imgFolder = CFG.image_path + self.mode + '/' + jsonFileName + '/' + imgFolderName + '/'
+                
+                # get first image in imgFolder
+                img_list = os.listdir(imgFolder)
+                img_list.sort()
+                # TODO: CHECK IT AGAIN
+                idx = random.randint(0, len(img_list)-1)
+                img_path = imgFolder + img_list[idx]
+                                
+                image = cv2.imread(img_path)
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                 image = self.transforms(image=image)['image']
-                img = torch.tensor(image).permute(2, 0, 1).float()
+                image = torch.tensor(image).permute(2, 0, 1).float()
+
 
             src_row['y'] = torch.tensor([LABELS.index(src_row['label'])], dtype=torch.long)
 
@@ -70,7 +80,8 @@ class PrescriptionPillData(Dataset):
                 label=src_row['label'],
                 p_num=p_num,
                 y=src_row['y'],
-                img=img
+                img=image,
+                matching_label=matching_label
                )
 
             src_range_x = (src_row["x_min"], src_row["x_max"])
@@ -130,14 +141,9 @@ class PrescriptionPillData(Dataset):
             with open(self.json_files[idx], "r") as f:
                 raw = json.load(f)
                 f.close()
-                filename = str(self.json_files[idx]).split('/')[-1].split('.')[0]
-        else:
-            # TODO: CHECK IT LATER 
-            # raw = self.json_files[idx]["anno"]
-            pass
-
-        G = self.connect(bboxes=raw,
-                         imgw=2000, imgh=2000, img_folder_name=filename)
+                jsonFileName = str(self.json_files[idx]).split('/')[-1].split('.')[0]
+        
+        G = self.connect(bboxes=raw, imgw=2000, imgh=2000, jsonFileName=jsonFileName)
         
         # For Draw Graph IMG 
         # nx.draw(G,node_size= 20, with_labels = True)
@@ -160,10 +166,7 @@ class PrescriptionPillData(Dataset):
         if isinstance(self.json_files[idx], str):
             data.path = self.json_files[idx]
             data.imname = osp.basename(data.path)
-        else:
-            # TODO: CHECK IT LATER 
-            # data.imname = self.json_files[idx]["fname"]
-            pass
+
         return data
 
 def get_transforms(mode="train"):

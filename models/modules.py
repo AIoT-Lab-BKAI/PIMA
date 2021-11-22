@@ -23,6 +23,7 @@ class BERTxSAGE(torch.nn.Module):
         self.activation = nn.Tanh()
         self.conv1 = SAGEConv(self.hidden_size + 2, 512)
         self.conv2 = SAGEConv(512,  256)
+        
         # self.post_process_layers = nn.Sequential(
         #     nn.BatchNorm1d(256, affine= False),
         #     nn.Dropout(p=0.2),
@@ -34,7 +35,6 @@ class BERTxSAGE(torch.nn.Module):
             param.requires_grad = False
 
     def forward(self, data):
-        # print(data)
         # for transductive setting with full-batch update
         edge_index, edge_weight = data.edge_index, data.edge_attr
         bert_output = self.BERT(attention_mask=data.attention_mask,

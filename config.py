@@ -1,11 +1,11 @@
+# cuda = 2
 
-cuda = 2
-
+LABELS = ['diagnose', 'drugname', 'usage', 'quantity', 'date','other']
 # graph 
 graph_embedding = 256
 
 # image size
-image_path = 'data/pills'
+image_path = 'data/pills/'
 depth = 3 # RGB Image
 size = 224
 model_name = 'resnet50'
