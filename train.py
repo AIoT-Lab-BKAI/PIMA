@@ -3,14 +3,12 @@ import glob
 import logging
 import os
 import torch
-import torch.nn.functional as F
-from torch_geometric.data import Data, DataLoader
+from torch_geometric.data import DataLoader
 from tqdm import tqdm
 from transformers import get_linear_schedule_with_warmup
 from torch.utils.tensorboard import SummaryWriter
-import torchvision
 from data.data import PrescriptionPillData
-from utils.metrics import MetricTracker
+from utils.metrics import MetricTracker, MatchingMetric
 from utils import LABELS
 from models.prescription_pill import PrescriptionPill
 import config as CFG
@@ -33,7 +31,7 @@ def build_loaders(files, mode="train"):
 
     return dataloader
 
-def train(model, train_loader, optimizer, criterion, lr_scheduler, epoch, log_writer):
+def train(model, train_loader, optimizer, criterion, matching_metric, lr_scheduler, epoch, log_writer):
     """[Train]
 
     Args:
@@ -58,18 +56,22 @@ def train(model, train_loader, optimizer, criterion, lr_scheduler, epoch, log_wr
                 data = data.cuda()
             optimizer.zero_grad()
             
-            graph_extract, pill_prescription_loss = model(data)
+            graph_extract, image_embeddings, graph_embeddings = model(data)
+            
+            # Matching loss 
+            loss_graph_images = matching_metric.compute_loss(image_embeddings, graph_embeddings)
+
             # KIE Loss
             extract_loss = criterion(graph_extract, data.y) 
 
-            loss = extract_loss + pill_prescription_loss
+            loss = extract_loss + 1 * loss_graph_images
             loss.backward()
             optimizer.step()
             lr_scheduler.step()
 
             train_loss += loss
             extractLoss += extract_loss
-            pillPrescriptionLoss += pill_prescription_loss
+            pillPrescriptionLoss += loss_graph_images
 
 
     train_loss /= len(train_loader)
@@ -81,7 +83,7 @@ def train(model, train_loader, optimizer, criterion, lr_scheduler, epoch, log_wr
     return train_loss, extractLoss, pillPrescriptionLoss
 
 
-def val(model, val_loader, criterion, epoch, metric, log_writer):
+def val(model, val_loader, criterion, matching_metric, epoch, metric, log_writer):
     """[summary]
 
     Args:
@@ -97,19 +99,36 @@ def val(model, val_loader, criterion, epoch, metric, log_writer):
     """
     model.eval()
     val_loss = 0.
+    matching_acc = []
+
     for data in tqdm(val_loader, desc="Validation"):
         if args.cuda:
             data = data.cuda()
         with torch.no_grad():
-            output, loss_graph_images = model(data)
-            val_loss += (criterion(output, data.y) + loss_graph_images).item()
-            # get the index of the max log-probability
-            pred = output.data.max(1, keepdim=True)[1]
+            graph_extract, image_embeddings, graph_embeddings = model(data)
+
+            # Matching loss
+            loss_graph_images = matching_metric.compute_loss(image_embeddings, graph_embeddings)
+            # KIE Loss
+            extract_loss = criterion(graph_extract, data.y)
+
+            loss = extract_loss + 1 * loss_graph_images
+            val_loss += loss.item()
+
+            # get the index of the max log-probability (KIE)
+            pred = graph_extract.data.max(1, keepdim=True)[1]
             metric.update(pred, data.y.data.view_as(pred))
+
+            # Matching accuracy
+            matching_acc.append(matching_metric.accuracy(image_embeddings, graph_embeddings, data.matching_label))
+
     
     val_loss /= len(val_loader)
     print(f"Classification Report:")
     print(metric.compute())
+
+    print(f"Matching Accuracy:", sum(matching_acc) / len(matching_acc))
+
     if log_writer:
         log_writer.add_scalar('val/loss', val_loss, epoch)
     metric.reset()
@@ -149,6 +168,7 @@ def main(args):
     
     class_weights = torch.FloatTensor([2.0, 1.5, 1.0, 1.0, 1.0, 0.2]).cuda()
     criterion = torch.nn.NLLLoss(weight=class_weights)
+    matching_metric = MatchingMetric(temperature=CFG.temperature)
 
     # Define optimizer.
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=5e-4)
@@ -162,9 +182,8 @@ def main(args):
     log_writer = SummaryWriter(args.log_dir)
 
     for epoch in range(1, args.epochs + 1):
-        train_loss, extractLoss, pillPrescriptionLoss = train(model, train_loader, optimizer, criterion, lr_scheduler, epoch, log_writer)
-        
-        val_loss = val(model, val_loader, criterion, epoch, metric, log_writer)
+        train_loss, extractLoss, pillPrescriptionLoss = train(model, train_loader, optimizer, criterion, matching_metric, lr_scheduler, epoch, log_writer)
+        val_loss = val(model, val_loader, criterion, matching_metric, epoch, metric, log_writer)
 
         print('Train Epoch: {} \nTrain Loss: {:.6f} \tExtract Loss: {:.6f} \tPill Prescription Loss: {:.6f} \nValidation Loss: {:.6f} \t'.format(
             epoch, train_loss, extractLoss, pillPrescriptionLoss, val_loss))
@@ -185,8 +204,8 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch BERT-GCN')
     
-    parser.add_argument('--batch-size', type=int, default=2, metavar='N')
-    parser.add_argument('--val-batch-size', type=int, default=2, metavar='N')
+    parser.add_argument('--batch-size', type=int, default=4, metavar='N')
+    parser.add_argument('--val-batch-size', type=int, default=4, metavar='N')
 
     parser.add_argument('--train-folder', type=str,
                         default="data/prescriptions/train/",
@@ -199,7 +218,7 @@ if __name__ == '__main__':
                         default="logs/runs/",
                         help='TensorBoard folder path')    
 
-    parser.add_argument('--epochs', type=int, default=50, metavar='N',
+    parser.add_argument('--epochs', type=int, default=100, metavar='N',
                         help='number of epochs to train (default: 10)')
 
     parser.add_argument('--lr', type=float, default=5e-5, metavar='LR',
