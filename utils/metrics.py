@@ -32,8 +32,12 @@ class MatchingMetric:
         super().__init__()
         self.temperature = temperature
 
-    def compute_loss(self, image_embeddings, graph_embeddings):
-        logits = (graph_embeddings @ image_embeddings.T) / self.temperature
+    def compute_loss(self, image_embeddings, graph_embeddings, matching_label):
+        # image_embeddings = image_embeddings[matching_label == 1]
+
+        logits = (image_embeddings @ graph_embeddings.T) / self.temperature
+        # logits = (graph_embeddings @ image_embeddings.T) / self.temperature
+
         images_similarity = image_embeddings @ image_embeddings.T
         graph_similarity = graph_embeddings @ graph_embeddings.T
 
@@ -56,16 +60,12 @@ class MatchingMetric:
             return loss.mean()
     
     def accuracy(self, image_embeddings, graph_embeddings, matching_label):
-        image_embeddings_real = image_embeddings[matching_label == 1]
-        logits = (image_embeddings_real @ graph_embeddings.T) / self.temperature
+        image_embeddings = image_embeddings[matching_label == 1]
+        logits = (image_embeddings @ graph_embeddings.T) / self.temperature
 
         preds = logits.argmax(dim=1)
         targets = [i for i, v in enumerate(matching_label) if v == 1]
 
         accuracy = accuracy_score(targets, preds.cpu())
         
-        # print("Preds: ", preds)
-        # print("Targets: ", targets)
-        # print(f"Accuracy: {accuracy}")
-        # print('*' * 100)
         return accuracy

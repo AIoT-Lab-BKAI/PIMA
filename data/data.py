@@ -48,7 +48,8 @@ class PrescriptionPillData(Dataset):
                 img_list = os.listdir(imgFolder)
                 img_list.sort()
                 # TODO: CHECK IT AGAIN
-                idx = random.randint(0, len(img_list)-1)
+                # idx = random.randint(0, len(img_list)-1)
+                idx = 0
                 img_path = imgFolder + img_list[idx]
                                 
                 image = cv2.imread(img_path)

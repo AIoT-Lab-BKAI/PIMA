@@ -59,7 +59,7 @@ def train(model, train_loader, optimizer, criterion, matching_metric, lr_schedul
             graph_extract, image_embeddings, graph_embeddings = model(data)
             
             # Matching loss 
-            loss_graph_images = matching_metric.compute_loss(image_embeddings, graph_embeddings)
+            loss_graph_images = matching_metric.compute_loss(image_embeddings, graph_embeddings, data.matching_label)
 
             # KIE Loss
             extract_loss = criterion(graph_extract, data.y) 
@@ -108,7 +108,7 @@ def val(model, val_loader, criterion, matching_metric, epoch, metric, log_writer
             graph_extract, image_embeddings, graph_embeddings = model(data)
 
             # Matching loss
-            loss_graph_images = matching_metric.compute_loss(image_embeddings, graph_embeddings)
+            loss_graph_images = matching_metric.compute_loss(image_embeddings, graph_embeddings, data.matching_label)
             # KIE Loss
             extract_loss = criterion(graph_extract, data.y)
 
@@ -204,8 +204,8 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch BERT-GCN')
     
-    parser.add_argument('--batch-size', type=int, default=4, metavar='N')
-    parser.add_argument('--val-batch-size', type=int, default=4, metavar='N')
+    parser.add_argument('--batch-size', type=int, default=2, metavar='N')
+    parser.add_argument('--val-batch-size', type=int, default=2, metavar='N')
 
     parser.add_argument('--train-folder', type=str,
                         default="data/prescriptions/train/",
