@@ -2,3 +2,7 @@ data/pills
 data/prescriptions
 logs
 vis
+__pycache__
+data/__pycache__
+
+

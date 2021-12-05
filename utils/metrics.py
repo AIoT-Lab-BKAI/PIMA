@@ -5,6 +5,7 @@ import config as CFG
 import torch.nn.functional as F
 from torch import nn
 
+
 class MetricTracker:
     def __init__(self, labels=None):
         super().__init__()
@@ -21,20 +22,21 @@ class MetricTracker:
         preds = torch.cat(self.preds).cpu().numpy()
         targets = torch.cat(self.targets).cpu().numpy()
         return classification_report(targets, preds,
-                                target_names=self.target_names, zero_division=0)
+                                     target_names=self.target_names, zero_division=0)
 
     def reset(self):
         self.preds = []
         self.targets = []
 
-class MatchingMetric: 
+
+class MatchingMetric:
     def __init__(self, temperature=CFG.temperature):
         super().__init__()
         self.temperature = temperature
 
-    def compute_loss(self, image_embeddings, graph_embeddings, matching_label):
-        # image_embeddings = image_embeddings[matching_label == 1]
+    def compute_loss(self, image_embeddings, graph_embeddings):
 
+        logits = (image_embeddings @ graph_embeddings.T) / self.temperature
         logits = (image_embeddings @ graph_embeddings.T) / self.temperature
         # logits = (graph_embeddings @ image_embeddings.T) / self.temperature
 
@@ -45,8 +47,8 @@ class MatchingMetric:
             (images_similarity + graph_similarity) / 2 * self.temperature, dim=-1
         )
 
-        images_loss = self.cross_entropy(logits, targets, reduction='none') 
-        graph_loss = self.cross_entropy(logits.T, targets.T, reduction='none') 
+        images_loss = self.cross_entropy(logits, targets, reduction='none')
+        graph_loss = self.cross_entropy(logits.T, targets.T, reduction='none')
         pill_prescription_loss = (images_loss + graph_loss) / 2.0
 
         return pill_prescription_loss.mean()
@@ -58,7 +60,7 @@ class MatchingMetric:
             return loss
         elif reduction == "mean":
             return loss.mean()
-    
+
     def accuracy(self, image_embeddings, graph_embeddings, matching_label):
         image_embeddings = image_embeddings[matching_label == 1]
         logits = (image_embeddings @ graph_embeddings.T) / self.temperature
@@ -67,5 +69,5 @@ class MatchingMetric:
         targets = [i for i, v in enumerate(matching_label) if v == 1]
 
         accuracy = accuracy_score(targets, preds.cpu())
-        
+
         return accuracy

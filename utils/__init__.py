@@ -4,7 +4,7 @@ import numpy as np
 all_letters = 'aAàÀảẢãÃáÁạẠăĂằẰẳẲẵẴắẮặẶâÂầẦẩẨẫẪấẤậẬbBcCdDđĐeEèÈẻẺẽẼéÉẹẸêÊềỀểỂễỄếẾệỆfFgGhHiIìÌỉỈĩĨíÍịỊjJkKlLmMnNoOòÒỏỎõÕóÓọỌôÔồỒổỔỗỖốỐộỘơƠờỜởỞỡỠớỚợỢpPqQrRsStTuUùÙủỦũŨúÚụỤưƯừỪửỬữỮứỨựỰvVwWxXyYỳỲỷỶỹỸýÝỵỴzZ0123456789!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~ '
 n_letters = len(all_letters)
 
-LABELS = ['diagnose', 'drugname', 'usage', 'quantity', 'date','other']
+# LABELS = ['diagnose', 'drugname', 'usage', 'quantity', 'date','other']
 # https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html
 
 # Find letter index from all_letters, e.g. "a" = 0
