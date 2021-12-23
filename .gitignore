@@ -1,5 +1,6 @@
 data/pills
 data/prescriptions
+data/large-pills
 logs
 vis
 __pycache__

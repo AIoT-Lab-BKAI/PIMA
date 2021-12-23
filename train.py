@@ -1,9 +1,5 @@
 import argparse
 import glob
-import logging
-import os
-from networkx.algorithms import similarity
-from numpy import positive
 import torch
 from torch import nn
 from torch_geometric.data import DataLoader
@@ -14,6 +10,7 @@ from data.data import PrescriptionPillData
 from utils.metrics import MetricTracker, MatchingMetric
 from models.prescription_pill import PrescriptionPill
 import config as CFG
+
 
 def build_loaders(files, mode="train"):
     """[Build Loader]
@@ -26,12 +23,40 @@ def build_loaders(files, mode="train"):
     """
     dataset = PrescriptionPillData(files, mode)
     dataloader = DataLoader(
-        dataset, 
-        batch_size=args.batch_size, 
-        num_workers=4, 
+        dataset,
+        batch_size=args.batch_size,
+        num_workers=4,
         shuffle=True)
 
     return dataloader
+
+
+def creat_batch_triplet(image_embedding, graph_embedding_pills, graph_embedding_pills_labels, labels):
+    """[summary]
+
+    Args:
+        image_embedding ([type]): [description]
+        graph_embedding ([type]): [description]
+        labels ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """
+    anchor, positive, negative = torch.tensor([]).cuda(
+    ), torch.tensor([]).cuda(), torch.tensor([]).cuda()
+
+    for idx, label in enumerate(labels):
+        positive_idx = graph_embedding_pills_labels.eq(label)
+        negative_idx = graph_embedding_pills_labels.ne(label)
+
+        anchor = torch.cat(
+            (anchor, image_embedding[idx].unsqueeze(0).unsqueeze(0)))
+        positive = torch.cat(
+            (positive, graph_embedding_pills[positive_idx].unsqueeze(0)))
+        negative = torch.cat(
+            (negative, graph_embedding_pills[negative_idx].unsqueeze(0)))
+
+    return anchor, positive, negative
 
 
 def train(model, train_loader, optimizer, criterion, matching_criterion, lr_scheduler, epoch, log_writer):
@@ -54,42 +79,57 @@ def train(model, train_loader, optimizer, criterion, matching_criterion, lr_sche
 
     train_loss = []
     with tqdm(train_loader, desc=f"Train Epoch {epoch}") as train_bar:
-        # Loop through for each prescription 
+        # Loop through for each prescription
         for data in train_bar:
             if args.cuda:
                 data = data.cuda()
             optimizer.zero_grad()
 
             pre_loss = []
-            pills_loader = torch.utils.data.DataLoader(data.pills_from_folder[0], batch_size=1, shuffle=True, num_workers=4)
+            pills_loader = torch.utils.data.DataLoader(
+                data.pills_from_folder[0], batch_size=16, shuffle=True, num_workers=4)
+
+            flag = 1
             for images, labels in pills_loader:
                 if args.cuda:
                     images = images.cuda()
                     labels = labels.cuda()
-                
-                image_embedding, graph_embedding = model(data, images)
 
-                positive_idx = data.pills_label.eq(labels).nonzero().squeeze()
-                negative_idx = data.pills_label.ne(labels).nonzero().squeeze()
+                image_embedding, graph_embedding, graph_extract = model(
+                    data, images)
 
-                anchor = image_embedding                 
-                positive = graph_embedding[positive_idx]
-                positive = positive.unsqueeze(0)
-                negative = graph_embedding[negative_idx]
+                print("TEXT:")
+                print(data.text[0][0])
+                print(data.input_ids[0])
+                # print(data.path)
+                # print(data.pills_label)
+                # get graph_embedding where data.pills_label >= 0
 
-                loss = matching_criterion(anchor, positive, negative)
+                break
+                graph_embedding_pills = graph_embedding[data.pills_label >= 0]
+                graph_embedding_pills_labels = data.pills_label[data.pills_label >= 0]
+                anchor, positive, negative = creat_batch_triplet(
+                    image_embedding, graph_embedding_pills, graph_embedding_pills_labels, labels)
+
+                # cosine similary => max la 1
+                # max{( negative - positive + 1), 0}
+                triplet_loss = matching_criterion(anchor, negative, positive)
+                extract_loss = criterion(graph_extract, data.y)
+
+                loss = triplet_loss + flag * extract_loss
+                flag = 0
+
                 loss.backward()
                 optimizer.step()
-
                 pre_loss.append(loss.item())
-                # break
-            
-            lr_scheduler.step()
-            train_loss.append(sum(pre_loss) / len(pre_loss))
-            # break
-        
-    print("Train_loss: ", sum(train_loss) / len(train_loss))
 
+                lr_scheduler.step()
+
+                # print(loss.item())
+            # train_loss.append(sum(pre_loss) / len(pre_loss))
+            break
+
+    # print("Train_loss: ", sum(train_loss) / len(train_loss))
 
 
 def val(model, val_loader, criterion, matching_criterion, epoch, metric, log_writer):
@@ -107,32 +147,56 @@ def val(model, val_loader, criterion, matching_criterion, epoch, metric, log_wri
         [type]: [description]
     """
     model.eval()
-    
+
     matching_acc = []
     with torch.no_grad():
         for data in tqdm(val_loader, desc="Validation"):
             if args.cuda:
                 data = data.cuda()
-            
+
             correct = []
-            pills_loader = torch.utils.data.DataLoader(data.pills_from_folder[0], batch_size=1, shuffle=True, num_workers=4)
+            pills_loader = torch.utils.data.DataLoader(
+                data.pills_from_folder[0], batch_size=16, shuffle=True, num_workers=4)
             for images, labels in pills_loader:
                 if args.cuda:
                     images = images.cuda()
                     labels = labels.cuda()
 
-                image_embedding, graph_embedding = model(data, images)
+                image_embedding, graph_embedding, graph_extract = model(
+                    data, images)
 
+                # KIE Extract (graph_extract)
+                graph_predict = graph_extract.argmax(dim=-1)
+
+                # get graph_embedding where graph_predict CFG.drugname_label
+                graph_embedding_pills = graph_embedding[graph_predict ==
+                                                        CFG.drugname_label]
+                graph_embedding_pills_labels = data.pills_label[graph_predict ==
+                                                                CFG.drugname_label]
+                if len(graph_embedding_pills) == 0:
+                    correct.append(0)
+                    continue
+
+                image_embedding = image_embedding.unsqueeze(1)
                 # consine similarity image_embedding, graph_embedding
-                similarity = nn.functional.cosine_similarity(image_embedding, graph_embedding, dim=1)
-                idx = similarity.argmax()
-                predict_label = data.pills_label[idx].item()
-                correct.append(predict_label == labels.item())
-                # break
-            # break
-            matching_acc.append(sum(correct) / len(correct))
-    print("Val_acc: ", sum(matching_acc) / len(matching_acc))
+                similarity = nn.functional.cosine_similarity(
+                    image_embedding, graph_embedding_pills, dim=-1)
 
+                # TODO: CHECK AGAIN
+                _, pred = similarity.max(dim=-1)
+                predict_label = graph_embedding_pills_labels[pred]
+                correct.append(
+                    torch.eq(predict_label, labels).float().mean().item())
+
+            matching_acc.append(sum(correct) / len(correct))
+
+            # Calculate metric of KIE
+            pred = graph_extract.data.max(dim=1, keepdim=True)[1]
+            metric.update(pred, data.y.data.view_as(pred))
+
+    print("Val_acc: ", sum(matching_acc) / len(matching_acc))
+    print("KIE Report: \n", metric.compute())
+    metric.reset()
 
 
 def main(args):
@@ -168,18 +232,21 @@ def main(args):
     if args.cuda:
         model.cuda()
 
-
-    class_weights = torch.FloatTensor(CFG.labels_weight).cuda()
-    criterion = torch.nn.NLLLoss(weight=class_weights)
+    # class_weights = torch.FloatTensor(CFG.labels_weight).cuda()
+    # graph_criterion = torch.nn.NLLLoss(weight=class_weights)
+    graph_criterion = torch.nn.NLLLoss()
 
     # TODO:
-    matching_criterion = nn.TripletMarginWithDistanceLoss(distance_function = nn.CosineSimilarity(dim=1, eps=1e-6))
+    matching_criterion = nn.TripletMarginWithDistanceLoss(
+        distance_function=nn.CosineSimilarity(dim=-1), margin=1)
 
     # Define optimizer
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=5e-4)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=args.lr, weight_decay=5e-4)
     t_total = len(train_loader) * args.epochs
 
-    lr_scheduler = get_linear_schedule_with_warmup(optimizer=optimizer, num_warmup_steps=args.num_warmup_steps, num_training_steps=t_total)
+    lr_scheduler = get_linear_schedule_with_warmup(
+        optimizer=optimizer, num_warmup_steps=args.num_warmup_steps, num_training_steps=t_total)
 
     # Tracker Graph
     metric = MetricTracker(labels=CFG.LABELS)
@@ -187,14 +254,18 @@ def main(args):
     log_writer = SummaryWriter(args.log_dir)
 
     for epoch in range(1, args.epochs + 1):
-        train(model, train_loader, optimizer, criterion,
-              matching_criterion, lr_scheduler, epoch, log_writer)
 
-        print(">>>> Train Validation...")
-        val(model, train_loader, criterion, matching_criterion, epoch, metric, log_writer)
+        pass
 
-        print(">>>> Test Validation...")
-        val(model, val_loader, criterion, matching_criterion, epoch, metric, log_writer)
+        # train(model, train_loader, optimizer, graph_criterion,
+        #       matching_criterion, lr_scheduler, epoch, log_writer)
+        # break
+
+        # print(">>>> Train Validation...")
+        # val(model, train_loader, graph_criterion, matching_criterion, epoch, metric, log_writer)
+
+        # print(">>>> Test Validation...")
+        # val(model, val_loader, graph_criterion, matching_criterion, epoch, metric, log_writer)
 
         # train_loss, extractLoss, pillPrescriptionLoss = train(
         #     model, train_loader, optimizer, criterion, matching_criterion, lr_scheduler, epoch, log_writer)
@@ -236,7 +307,7 @@ if __name__ == '__main__':
     parser.add_argument('--log-dir', type=str,
                         default="logs/runs/",
                         help='TensorBoard folder path')
-    parser.add_argument('--epochs', type=int, default=10, metavar='N',
+    parser.add_argument('--epochs', type=int, default=50, metavar='N',
                         help='number of epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=5e-5, metavar='LR',
                         help='learning rate (default: 5e-5)')

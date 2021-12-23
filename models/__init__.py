@@ -1,1 +1,1 @@
-from .modules import BERTxSAGE, ImageEncoder, ProjectionHead
+from .modules import BERTxSAGE, ImageEncoder, ProjectionHead, TextEncoder, ImageEncoderTimm, sentencesTransformer

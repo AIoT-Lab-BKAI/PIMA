@@ -8,43 +8,41 @@ import torchvision.transforms as transforms
 import torch
 from torch_geometric.data import Dataset
 from torch_geometric.utils.convert import from_networkx
-from transformers import RobertaTokenizer
+from transformers import BertTokenizer
 from genericpath import isfile
-import glob
 import config as CFG
-
-import os
-import cv2
-
+from transformers import AutoTokenizer
 
 class PrescriptionPillData(Dataset):
-    def __init__(self, json_files, mode, bert_model="roberta-base"):
+    def __init__(self, json_files, mode, bert_model=CFG.text_encoder_model):
         """
         Args:
             json_files: list of label json file paths
         """
-        self.tokenizer = RobertaTokenizer.from_pretrained(bert_model)
+        self.tokenizer = BertTokenizer.from_pretrained(bert_model)
+        self.text_sentences_tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/paraphrase-mpnet-base-v2')
         self.json_files = json_files
         self.mode = mode
         self.transforms = get_transforms(self.mode)
 
-
     def connect(self, bboxes, imgw, imgh, pills_class):
         G = nx.Graph()
-
-
         for src_idx, src_row in enumerate(bboxes):
             src_row['label'] = src_row['label'].lower()
 
             if not src_row['label']:
                 src_row['label'] = "other"
+            # GET ONLY LABEL IS DRUGNAME 
+            if src_row['label'] != 'drugname':
+                src_row['label'] = "other"
 
             # FOR PILL - PRESCRIPTION
             if src_row['label'] == 'drugname':
-                pills_label = torch.tensor(pills_class[src_row['mapping']], dtype=torch.long)                
+                pills_label = torch.tensor(
+                    pills_class[src_row['mapping']], dtype=torch.long)
             else:
                 pills_label = torch.tensor(-1, dtype=torch.long)
-            
+
             src_row['y'] = torch.tensor(
                 [CFG.LABELS.index(src_row['label'])], dtype=torch.long)
 
@@ -124,7 +122,7 @@ class PrescriptionPillData(Dataset):
         return len(self.json_files)
 
     def __getitem__(self, idx):
-        
+
         if torch.is_tensor(idx):
             idx = idx.tolist()
         if isinstance(self.json_files[idx], str):
@@ -132,19 +130,19 @@ class PrescriptionPillData(Dataset):
                 raw = json.load(f)
                 f.close()
 
-        # self.json_files[idx] => data/prescriptions/train/20210407_223358121128.json
-        
-        ### FOR IMAGE PILLS
-        pills_image_folder_name = self.json_files[idx].split("/")[-1].split(".")[0]
+        # FOR IMAGE PILLS
+        pills_image_folder_name = self.json_files[idx].split(
+            "/")[-1].split(".")[0]
         pills_image_path = CFG.image_path + self.mode + "/" + pills_image_folder_name
-        pills_image_folder = torchvision.datasets.ImageFolder(pills_image_path, transform=self.transforms)
+        pills_image_folder = torchvision.datasets.ImageFolder(
+            pills_image_path, transform=self.transforms)
 
         pills_class_to_idx = pills_image_folder.class_to_idx
 
-        ### FOR PRESCRIPTIONS
-        G = self.connect(bboxes=raw, imgw=2000, imgh=2000, pills_class = pills_class_to_idx)
-        
- 
+        # FOR PRESCRIPTIONS
+        G = self.connect(bboxes=raw, imgw=2000, imgh=2000,
+                         pills_class=pills_class_to_idx)
+
         # For Draw Graph IMG
         # nx.draw(G,node_size= 20, with_labels = True)
         # if not isfile('./vis/image_'+str(idx)+'.png'):
@@ -152,10 +150,13 @@ class PrescriptionPillData(Dataset):
 
         data = from_networkx(G)
         token = self.tokenizer(data.text, add_special_tokens=True, truncation=True,
-                               max_length=128, padding='max_length', return_tensors='pt')
+                               max_length=32, padding='max_length', return_tensors='pt')
         data.input_ids, data.attention_mask = token.input_ids, token.attention_mask
-        data.text_len = torch.count_nonzero(data.input_ids, dim=1) / 128.0
+        data.text_len = torch.count_nonzero(data.input_ids, dim=1) / 32.0
         data.text_len = torch.unsqueeze(data.text_len, dim=1)
+
+        text_sentences = self.text_sentences_tokenizer(data.text, max_length=32, padding='max_length', truncation=True, return_tensors='pt')
+        data.text_sentences_ids, data.text_sentences_mask = text_sentences.input_ids, text_sentences.attention_mask
 
         data.bbox = torch.Tensor(data.bbox)
         data.p_num = torch.Tensor(data.p_num)
@@ -165,27 +166,19 @@ class PrescriptionPillData(Dataset):
             data.path = self.json_files[idx]
             data.imname = osp.basename(data.path)
 
-        # random image 
-        # img = torch.rand(1, 3, 256, 256)
-        # data.img = img
-
         data.pills_from_folder = pills_image_folder
-
-        # print("IDX: ", idx)
-        # print(pills_class_to_idx)
-        # print(data.pills_label)
-        # print(data.y)
         return data
+
 
 def get_transforms(mode="train"):
     if mode == "train":
         transform = transforms.Compose([transforms.Resize((CFG.size, CFG.size)),
-                                    transforms.RandomRotation(10),
-                                    transforms.RandomHorizontalFlip(),
-                                    transforms.ToTensor(),
-                                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+                                        transforms.RandomRotation(10),
+                                        transforms.RandomHorizontalFlip(),
+                                        transforms.ToTensor(),
+                                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     else:
         transform = transforms.Compose([transforms.Resize((CFG.size, CFG.size)),
-                                    transforms.ToTensor(),
-                                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+                                        transforms.ToTensor(),
+                                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     return transform

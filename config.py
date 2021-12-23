@@ -1,7 +1,16 @@
 # cuda = 2
 
-LABELS = ['drugname', 'diagnose', 'usage', 'quantity', 'date', 'other']
-labels_weight = [1.5, 1.5, 1.0, 1.0, 1.0, 0.2]
+# LABELS = ['drugname', 'diagnose', 'usage', 'quantity', 'date', 'other']
+LABELS = ['drugname', 'other']
+drugname_label = 0
+# labels_weight = [0.8, 0.2, 0.2, 0.2, 0.2, 0.1]
+
+# text_embedding
+text_embedding = 768
+text_encoder_model = "bert-base-cased"
+text_pretrained = True
+text_trainable = True
+
 # graph
 graph_embedding = 256
 
@@ -11,9 +20,9 @@ depth = 3  # RGB Image
 size = 224
 image_model_name = 'resnet50'
 # Default pretrained image_model_name
-image_pretrained = False 
+image_pretrained = True 
 image_trainable = True
-image_pretrained_link = '/mnt/disk1/vaipe-thanhnt/EMED-Prescription-and-Pill-matching/pills-resnet/logs/model_5.pth'
+image_pretrained_link = '/mnt/disk1/vaipe-thanhnt/EMED-Prescription-and-Pill-matching/test/cv-model/pills-resnet/logs/model_5.pth'
 image_embedding = 2048
 image_batch_size = 16
 
