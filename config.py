@@ -15,7 +15,7 @@ text_trainable = True
 graph_embedding = 256
 
 ### Image Encoder Config
-image_path = 'data/pills/'
+image_path = 'data/small-pills/'
 depth = 3  # RGB Image
 size = 224
 image_model_name = 'resnet50'

@@ -7,6 +7,7 @@ from tqdm import tqdm
 from transformers import get_linear_schedule_with_warmup
 from data.data import PrescriptionPillData
 from models.prescription_pill import PrescriptionPill
+import config as CFG
 from utils.metrics import TripletLoss
 
 
@@ -28,6 +29,39 @@ def build_loaders(files, mode="train"):
 
     return dataloader
 
+
+def creat_batch_triplet_random(image_embedding, graph_embedding_pills, graph_embedding_pills_labels, labels, random_percent=0.2):
+    """[summary]
+
+    Args:
+        image_embedding ([type]): [description]
+        graph_embedding ([type]): [description]
+        labels ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """
+    anchor, positive, negative = torch.tensor([]).cuda(
+    ), torch.tensor([]).cuda(), torch.tensor([]).cuda()
+
+    for idx, label in enumerate(labels):
+        positive_idx = graph_embedding_pills_labels.eq(label)
+        negative_idx = graph_embedding_pills_labels.ne(label)
+        
+        anchor = torch.cat(
+            (anchor, image_embedding[idx].unsqueeze(0).unsqueeze(0)))
+        positive = torch.cat(
+            (positive, graph_embedding_pills[positive_idx].unsqueeze(0)))
+
+        if sum(negative_idx) == 0:           
+            negative = torch.cat((negative, torch.zeros_like(image_embedding[idx]).unsqueeze(0).unsqueeze(0)))
+        else:
+            random_negative = graph_embedding_pills[negative_idx]
+            random_negative = random_negative[torch.randperm(len(random_negative))]
+            random_negative = random_negative[:int(random_percent * len(random_negative))]
+            negative = torch.cat((negative, random_negative.unsqueeze(0)))
+    
+    return anchor, positive, negative
 
 def creat_batch_triplet(image_embedding, graph_embedding_pills, graph_embedding_pills_labels, labels):
     """[summary]
@@ -82,9 +116,7 @@ def train(model, train_loader, optimizer, matching_criterion, lr_scheduler, epoc
 
                 image_embedding, text_embedding = model(data, images)
 
-                text_embedding_drugname = text_embedding[data.pills_label >= 0]
-                text_embedding_labels = data.pills_label[data.pills_label >= 0]
-                anchor, positive, negative = creat_batch_triplet(image_embedding, text_embedding_drugname, text_embedding_labels, labels)                
+                anchor, positive, negative = creat_batch_triplet_random(image_embedding, text_embedding, data.pills_label, labels, random_percent=0.5)                
 
                 loss = matching_criterion(anchor, positive, negative)
                 loss.backward()
@@ -97,6 +129,7 @@ def train(model, train_loader, optimizer, matching_criterion, lr_scheduler, epoc
             train_bar.set_postfix(loss=train_loss[-1])
             
     print("Train_loss: ", sum(train_loss) / len(train_loss))
+
 
 
 def val(model, val_loader):
@@ -114,16 +147,17 @@ def val(model, val_loader):
                 if args.cuda:
                     images = images.cuda()
                     labels = labels.cuda()
+
                 image_embedding, text_embedding = model(data, images)
+                
                 similarity = image_embedding @ text_embedding.t()
                 _, predicted = torch.max(similarity, 1)
                 mapping_predicted = data.pills_label[predicted]
 
                 correct.append(mapping_predicted.eq(labels).sum().item() / len(labels))
             matching_acc.append(sum(correct) / len(correct))
+    print("Val_acc: ", sum(matching_acc) / len(matching_acc))
 
-    final_accuracy = sum(matching_acc) / len(matching_acc)
-    return final_accuracy
 
 def main(args):
     args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -151,7 +185,7 @@ def main(args):
     if args.cuda:
         model.cuda()
 
-    print(">>>> Preparing optimizer...")
+    # TODO:
     matching_criterion = TripletLoss()
 
     # Define optimizer
@@ -162,25 +196,16 @@ def main(args):
     lr_scheduler = get_linear_schedule_with_warmup(
         optimizer=optimizer, num_warmup_steps=args.num_warmup_steps, num_training_steps=t_total)
 
-    best_accuracy = 0
-    print(">>>> Training...")
+
     for epoch in range(1, args.epochs + 1):
         train(model, train_loader, optimizer,
               matching_criterion, lr_scheduler, epoch)
 
         print(">>>> Train Validation...")
-        train_acc = val(model, train_loader)
-        print("Train accuracy: ", train_acc)
-        
+        val(model, train_loader)
+
         print(">>>> Test Validation...")
-        val_acc = val(model, val_loader)
-        print("Val accuracy: ", val_acc)
-
-        if val_acc > best_accuracy:
-            best_accuracy = val_acc
-            print(">>>> Saving model...")
-            torch.save(model.state_dict(), args.save_folder + "best_model.pth")
-
+        val(model, val_loader)
 
 
 if __name__ == '__main__':
@@ -211,7 +236,7 @@ if __name__ == '__main__':
                         help='how many batches to wait before logging training status')
     parser.add_argument('--save-interval', type=int, default=1, metavar='N',
                         help='how many epoches to wait before saving model')
-    parser.add_argument('--save-folder', type=str, default="logs/saved/", metavar='N',
+    parser.add_argument('--save-folder', type=str, default="logs/saved", metavar='N',
                         help='how many epoches to wait before saving model')
 
     args = parser.parse_args()

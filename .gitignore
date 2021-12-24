@@ -1,9 +1,12 @@
 data/pills
 data/prescriptions
 data/large-pills
+data/small-pills
 logs
+logs/saved
 vis
 __pycache__
 data/__pycache__
+__pycache__
 
 
