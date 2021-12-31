@@ -114,6 +114,7 @@ def val(model, val_loader):
                 if args.cuda:
                     images = images.cuda()
                     labels = labels.cuda()
+
                 image_embedding, text_embedding = model(data, images)
                 similarity = image_embedding @ text_embedding.t()
                 _, predicted = torch.max(similarity, 1)

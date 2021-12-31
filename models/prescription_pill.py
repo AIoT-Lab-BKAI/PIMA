@@ -9,19 +9,19 @@ from models import ImageEncoder, ProjectionHead, BERTxSAGE, ImageEncoderTimm, se
 class PrescriptionPill(nn.Module):
     def __init__(self, image_embedding=CFG.image_embedding, text_embedding = CFG.text_embedding, graph_embedding=CFG.graph_embedding, graph_n_classes=len(CFG.LABELS), image_pretrained_link=CFG.image_pretrained_link):
         super().__init__()
-        self.image_encoder = ImageEncoderTimm()
-        # self.image_encoder = ImageEncoder()
+        # self.image_encoder = ImageEncoderTimm()
+        self.image_encoder = ImageEncoder()
 
-        # if image_pretrained_link is not None:
-        #     pre_train_state = torch.load(image_pretrained_link)
-        #     image_model_state = self.image_encoder.state_dict()
-        #     # 1. filter out unnecessary keys
-        #     pretrained_dict = {k: v for k, v in pre_train_state.items() if k in image_model_state}
-        #     # 2. overwrite entries in the existing state dict
-        #     image_model_state.update(pretrained_dict)
-        #     # 3. load the new state dict
-        #     self.image_encoder.load_state_dict(image_model_state)
-        #     print("Loaded pretrained image model successfully!")
+        if image_pretrained_link is not None:
+            pre_train_state = torch.load(image_pretrained_link)
+            image_model_state = self.image_encoder.state_dict()
+            # 1. filter out unnecessary keys
+            pretrained_dict = {k: v for k, v in pre_train_state.items() if k in image_model_state}
+            # 2. overwrite entries in the existing state dict
+            image_model_state.update(pretrained_dict)
+            # 3. load the new state dict
+            self.image_encoder.load_state_dict(image_model_state)
+            print("Loaded pretrained image model successfully!")
 
         # self.text_encoder = TextEncoder()
         self.graph_encoder = SBERTxSAGE()

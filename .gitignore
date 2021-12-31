@@ -2,11 +2,13 @@ data/pills
 data/prescriptions
 data/large-pills
 data/small-pills
+data/prescriptions.zip
+data/small-pills.zip
 logs
 logs/saved
 vis
 __pycache__
 data/__pycache__
 __pycache__
-
+wandb
 

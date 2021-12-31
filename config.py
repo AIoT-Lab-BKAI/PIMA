@@ -30,5 +30,3 @@ image_batch_size = 16
 num_projection_layers = 1
 projection_dim = 256
 dropout = 0.2
-
-temperature = 1.0
