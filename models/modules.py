@@ -48,6 +48,24 @@ class BERTxSAGE(torch.nn.Module):
 
         return x
 
+class SBERTxSAGE(torch.nn.Module):
+    def __init__(self, dropout_rate=0.2, hidden_size=CFG.text_embedding):
+        super().__init__()
+
+        self.hidden_size = hidden_size
+        self.conv1 = SAGEConv(self.hidden_size, 512)
+        self.conv2 = SAGEConv(512,  256)
+        self.activation = nn.Tanh()
+        self.dropout_rate = dropout_rate
+        
+    def forward(self, data, pooled_output):
+        edge_index, edge_weight = data.edge_index, data.edge_attr
+        x = self.activation(pooled_output)
+        x = F.dropout(F.relu(self.conv1(x, edge_index, edge_weight)),
+                      p=self.dropout_rate, training=self.training)
+        x = self.conv2(x, edge_index, edge_weight)
+        return x 
+
 class sentencesTransformer(torch.nn.Module):
     def __init__(self, model_name='sentence-transformers/paraphrase-mpnet-base-v2', trainable=CFG.text_trainable):
         super().__init__()
