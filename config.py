@@ -1,9 +1,7 @@
-# cuda = 2
-
 # LABELS = ['drugname', 'diagnose', 'usage', 'quantity', 'date', 'other']
 LABELS = ['drugname', 'other']
 drugname_label = 0
-# labels_weight = [0.8, 0.2, 0.2, 0.2, 0.2, 0.1]
+labels_weight = [0.9, 0.1]
 
 # text_embedding
 text_embedding = 768
