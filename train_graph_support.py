@@ -95,9 +95,8 @@ def train(model, train_loader, optimizer, matching_criterion, graph_criterion, l
                 loss.backward()
 
                 optimizer.step()
-                lr_scheduler.step()
                 pre_loss.append(loss.item())
-
+            lr_scheduler.step()
             train_loss.append(sum(pre_loss) / len(pre_loss))
             train_bar.set_postfix(loss=train_loss[-1])
 
