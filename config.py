@@ -12,13 +12,13 @@ text_trainable = True
 # graph
 graph_embedding = 256
 
-### Image Encoder Config
+# Image Encoder Config
 image_path = 'data/small-pills/'
 depth = 3  # RGB Image
 size = 224
 image_model_name = 'resnet50'
 # Default pretrained image_model_name
-image_pretrained = True 
+image_pretrained = False
 image_trainable = True
 image_pretrained_link = '/mnt/disk1/vaipe-thanhnt/EMED-Prescription-and-Pill-matching/test/cv-model/pills-resnet/logs/model_5.pth'
 image_embedding = 2048

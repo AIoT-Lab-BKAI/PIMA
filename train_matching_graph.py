@@ -54,11 +54,13 @@ def creat_batch_triplet(image_embedding, graph_embedding_pills, graph_embedding_
         positive = torch.cat(
             (positive, graph_embedding_pills[positive_idx].unsqueeze(0)))
 
-        if sum(negative_idx) == 0:           
-            negative = torch.cat((negative, torch.zeros_like(image_embedding[idx]).unsqueeze(0).unsqueeze(0)))
+        if sum(negative_idx) == 0:
+            negative = torch.cat((negative, torch.zeros_like(
+                image_embedding[idx]).unsqueeze(0).unsqueeze(0)))
         else:
-            negative = torch.cat((negative, graph_embedding_pills[negative_idx].unsqueeze(0)))
-    
+            negative = torch.cat(
+                (negative, graph_embedding_pills[negative_idx].unsqueeze(0)))
+
     return anchor, positive, negative
 
 
@@ -75,29 +77,32 @@ def train(model, train_loader, optimizer, matching_criterion, graph_criterion, l
 
             pre_loss = []
             pills_loader = torch.utils.data.DataLoader(
-                data.pills_from_folder[0], batch_size=16, shuffle=True, num_workers=4)
-            
+                data.pills_from_folder[0], batch_size=8, shuffle=True, num_workers=4)
+
             for images, labels in pills_loader:
                 if args.cuda:
                     images = images.cuda()
                     labels = labels.cuda()
 
-                image_features, sentences_graph_features, graph_extract = model.forward_matching_graph(data, images)
+                image_features, sentences_graph_features, graph_extract = model.forward_matching_graph(
+                    data, images)
 
                 # image_embedding, text_embedding = model(data, images)
                 # get graph feature
-                graph_loss = graph_criterion(graph_extract, data.y) 
+                graph_loss = graph_criterion(graph_extract, data.y)
 
                 text_embedding_drugname = sentences_graph_features[data.pills_label >= 0]
                 text_embedding_labels = data.pills_label[data.pills_label >= 0]
-                anchor, positive, negative = creat_batch_triplet(image_features, text_embedding_drugname, text_embedding_labels, labels)                  
+                anchor, positive, negative = creat_batch_triplet(
+                    image_features, text_embedding_drugname, text_embedding_labels, labels)
 
-                loss = matching_criterion(anchor, positive, negative) + graph_loss
+                loss = matching_criterion(
+                    anchor, positive, negative) + graph_loss
                 loss.backward()
 
                 optimizer.step()
-                lr_scheduler.step()
                 pre_loss.append(loss.item())
+            lr_scheduler.step()
 
             train_loss.append(sum(pre_loss) / len(pre_loss))
             train_bar.set_postfix(loss=train_loss[-1])
@@ -119,31 +124,35 @@ def val(model, val_loader, mode="train"):
 
             correct = []
             pills_loader = torch.utils.data.DataLoader(
-                data.pills_from_folder[0], batch_size=16, shuffle=True, num_workers=4)
+                data.pills_from_folder[0], batch_size=8, shuffle=True, num_workers=4)
             for images, labels in pills_loader:
                 if args.cuda:
                     images = images.cuda()
                     labels = labels.cuda()
 
-                image_features, sentences_graph_features, graph_extract = model.forward_matching_graph(data, images)
-                # For Graph 
+                image_features, sentences_graph_features, graph_extract = model.forward_matching_graph(
+                    data, images)
+                # For Graph
                 graph_predict = graph_extract.data.max(1, keepdim=True)[1]
-                metric.update(graph_predict, data.y.data.view_as(graph_predict))
+                metric.update(
+                    graph_predict, data.y.data.view_as(graph_predict))
 
                 # For Matching
                 similarity = image_features @ sentences_graph_features.t()
                 _, predicted = torch.max(similarity, 1)
                 mapping_predicted = data.pills_label[predicted]
 
-                correct.append(mapping_predicted.eq(labels).sum().item() / len(labels))
+                correct.append(mapping_predicted.eq(
+                    labels).sum().item() / len(labels))
             matching_acc.append(sum(correct) / len(correct))
 
     final_accuracy = sum(matching_acc) / len(matching_acc)
 
     print(f"Classification Report:")
     print(metric.compute())
-    
+
     return final_accuracy
+
 
 def main(args):
     print("CUDA status: ", args.cuda)
@@ -187,22 +196,22 @@ def main(args):
     print(">>>> Training...")
     for epoch in range(1, args.epochs + 1):
         train_loss = train(model, train_loader, optimizer,
-              matching_criterion, graph_criterion, lr_scheduler, epoch)
+                           matching_criterion, graph_criterion, lr_scheduler, epoch)
 
         print(">>>> Train Validation...")
         train_acc = val(model, train_loader)
         print("Train accuracy: ", train_acc)
-        
+
         print(">>>> Test Validation...")
         val_acc = val(model, val_loader, mode="Val")
         print("Val accuracy: ", val_acc)
 
-        wandb.log({"train_loss": train_loss, "train_acc": train_acc, "val_acc": val_acc})
+        wandb.log({"train_loss": train_loss,
+                  "train_acc": train_acc, "val_acc": val_acc})
         # if val_acc > best_accuracy:
         #     best_accuracy = val_acc
         #     print(">>>> Saving model...")
         #     torch.save(model.state_dict(), args.save_folder + "best_model.pth")
-
 
 
 if __name__ == '__main__':
@@ -229,19 +238,19 @@ if __name__ == '__main__':
 
     parse_args = parser.parse_args()
 
-    wandb.init(project="vaipe-pills-prescription-matching", entity="thanhhff",
-    config = {
-        "batch_size": parse_args.batch_size,
-        "val_batch_size": parse_args.val_batch_size,
-        "epochs": parse_args.epochs,
-        "lr": parse_args.lr,
-        "num_warmup_steps": parse_args.num_warmup_steps,
-        "train_folder": parse_args.train_folder,
-        "val_folder": parse_args.val_folder,
-        "save_folder": parse_args.save_folder,
-        "cuda": torch.cuda.is_available(),
-        "seed": parse_args.seed
-    })
-    args = wandb.config 
+    wandb.init(entity="aiotlab", project="VAIPE-Pills-Prescription-Matching", group="ThanhNT",
+               config={
+                   "batch_size": parse_args.batch_size,
+                   "val_batch_size": parse_args.val_batch_size,
+                   "epochs": parse_args.epochs,
+                   "lr": parse_args.lr,
+                   "num_warmup_steps": parse_args.num_warmup_steps,
+                   "train_folder": parse_args.train_folder,
+                   "val_folder": parse_args.val_folder,
+                   "save_folder": parse_args.save_folder,
+                   "cuda": torch.cuda.is_available(),
+                   "seed": parse_args.seed
+               })
+    args = wandb.config
     main(args)
     wandb.finish()
