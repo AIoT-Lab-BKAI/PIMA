@@ -1,13 +1,12 @@
-import torch
 from torch import nn
 import torch.nn.functional as F
 
 import config as CFG
-from models import ImageEncoder, ProjectionHead, BERTxSAGE, ImageEncoderTimm, sentencesTransformer, SBERTxSAGE
+from models import ImageEncoder, ProjectionHead, ImageEncoderTimm, sentencesTransformer, SBERTxSAGE
 
 
 class PrescriptionPill(nn.Module):
-    def __init__(self, image_embedding=CFG.image_embedding, text_embedding = CFG.text_embedding, graph_embedding = CFG.graph_embedding, graph_n_classes=len(CFG.LABELS), image_pretrained_link=CFG.image_pretrained_link, drop_out = CFG.dropout):
+    def __init__(self, image_embedding=CFG.image_embedding, text_embedding=CFG.text_embedding, graph_embedding=CFG.graph_embedding, graph_n_classes=len(CFG.LABELS), drop_out=CFG.dropout):
         super().__init__()
         self.image_encoder = ImageEncoderTimm()
 
@@ -25,14 +24,14 @@ class PrescriptionPill(nn.Module):
 
         self.graph_encoder = SBERTxSAGE()
         self.sentences_encoder = sentencesTransformer()
-
         self.image_projection = ProjectionHead(embedding_dim=image_embedding)
         self.text_projection = ProjectionHead(embedding_dim=text_embedding)
 
         # self.sentences_graph_projection = ProjectionHead(embedding_dim=text_embedding + graph_embedding)
         # an affine operation: y = Wx + b
         self.graph_text_weight = nn.Linear(graph_embedding, text_embedding)
-        self.sentences_graph_projection = ProjectionHead(embedding_dim=text_embedding)
+        self.sentences_graph_projection = ProjectionHead(
+            embedding_dim=text_embedding)
 
         self.post_process_layers = nn.Sequential(
             nn.BatchNorm1d(256, affine=False),
@@ -43,8 +42,9 @@ class PrescriptionPill(nn.Module):
 
     def forward_graph(self, data):
         # Getting graph embedding
-        graph_features = self.graph_encoder(data, self.sentences_encoder(data.text_sentences_ids, data.text_sentences_mask))
-        # FOR KIE 
+        graph_features = self.graph_encoder(data, self.sentences_encoder(
+            data.text_sentences_ids, data.text_sentences_mask, trainable=False))
+        # FOR KIE
         graph_extract = self.post_process_layers(graph_features)
         graph_extract = F.log_softmax(graph_extract, dim=-1)
         return graph_extract, graph_features
@@ -54,25 +54,29 @@ class PrescriptionPill(nn.Module):
         x = self.image_projection(x)
         return x
 
+    def forward_matching_graph(self, data, image):
+        image_features = self.get_image_features(image)
+        sentences_features = self.sentences_encoder(
+            data.text_sentences_ids, data.text_sentences_mask)
+
+        graph_extract, graph_features = self.forward_graph(data)
+
+        # TODO 1: Thử cái này
+        sentences_graph_features = sentences_features + \
+            self.graph_text_weight(graph_features)
+
+        # TODO 2: Thử cái dưới này
+        sentences_graph_features = self.sentences_graph_projection(
+            sentences_graph_features)
+
+        return image_features, sentences_graph_features, graph_extract
+
+    # For Only Text - Image
     def get_sentences_features(self, data):
-        x = self.sentences_encoder(data.text_sentences_ids, data.text_sentences_mask)
+        x = self.sentences_encoder(
+            data.text_sentences_ids, data.text_sentences_mask)
         x = self.text_projection(x)
-        return x 
+        return x
 
     def forward(self, data, pills_image):
         return self.get_image_features(pills_image), self.get_sentences_features(data)
-
-    def forward_matching_graph(self, data, image):
-        image_features = self.get_image_features(image)
-        sentences_features = self.sentences_encoder(data.text_sentences_ids, data.text_sentences_mask)
-    
-        graph_extract, graph_features = self.forward_graph(data)
-
-        # TODO 1: Thử cái này 
-        sentences_graph_features = sentences_features + self.graph_text_weight(graph_features)
-
-        # TODO 2: Thử cái dưới này 
-        # sentences_graph_features = torch.cat((sentences_features, graph_features), dim=1)
-        sentences_graph_features = self.sentences_graph_projection(sentences_graph_features)
-        
-        return image_features, sentences_graph_features, graph_extract

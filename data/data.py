@@ -13,14 +13,12 @@ from genericpath import isfile
 import config as CFG
 from transformers import AutoTokenizer
 
+
 class PrescriptionPillData(Dataset):
     def __init__(self, json_files, mode, bert_model=CFG.text_encoder_model):
-        """
-        Args:
-            json_files: list of label json file paths
-        """
         self.tokenizer = BertTokenizer.from_pretrained(bert_model)
-        self.text_sentences_tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/paraphrase-mpnet-base-v2')
+        self.text_sentences_tokenizer = AutoTokenizer.from_pretrained(
+            'sentence-transformers/paraphrase-mpnet-base-v2')
         self.json_files = json_files
         self.mode = mode
         self.transforms = get_transforms(self.mode)
@@ -32,7 +30,7 @@ class PrescriptionPillData(Dataset):
 
             if not src_row['label']:
                 src_row['label'] = "other"
-            # GET ONLY LABEL IS DRUGNAME 
+            # GET ONLY LABEL IS DRUGNAME
             if src_row['label'] != 'drugname':
                 src_row['label'] = "other"
 
@@ -155,7 +153,8 @@ class PrescriptionPillData(Dataset):
         data.text_len = torch.count_nonzero(data.input_ids, dim=1) / 32.0
         data.text_len = torch.unsqueeze(data.text_len, dim=1)
 
-        text_sentences = self.text_sentences_tokenizer(data.text, max_length=32, padding='max_length', truncation=True, return_tensors='pt')
+        text_sentences = self.text_sentences_tokenizer(
+            data.text, max_length=32, padding='max_length', truncation=True, return_tensors='pt')
         data.text_sentences_ids, data.text_sentences_mask = text_sentences.input_ids, text_sentences.attention_mask
 
         data.bbox = torch.Tensor(data.bbox)
