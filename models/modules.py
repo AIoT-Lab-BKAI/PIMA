@@ -51,7 +51,7 @@ class SBERTxSAGE(torch.nn.Module):
         self.dropout_rate = dropout_rate
 
     def forward(self, data, pooled_output):
-        edge_index, edge_weight = data.edge_index, data.edge_attr
+        edge_index, edge_weight = data.edge_index, data.edge_attr        
         x = pooled_output
         x = F.dropout(F.relu(self.conv1(x, edge_index, edge_weight)),
                       p=self.dropout_rate, training=self.training)

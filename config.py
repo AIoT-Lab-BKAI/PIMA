@@ -5,7 +5,7 @@ labels_weight = [0.9, 0.1]
 text_embedding = 768
 text_encoder_model = "bert-base-cased"
 text_pretrained = True
-text_trainable = True
+text_trainable = False
 
 # Graph
 graph_embedding = 256
