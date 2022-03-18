@@ -3,14 +3,15 @@ import torch.nn.functional as F
 
 import config as CFG
 from models import ImageEncoder, ProjectionHead, ImageEncoderTimm, sentencesTransformer, SBERTxSAGE
+import torch
 
 
 class PrescriptionPill(nn.Module):
-    def __init__(self, image_embedding=CFG.image_embedding, text_embedding=CFG.text_embedding, graph_embedding=CFG.graph_embedding, graph_n_classes=len(CFG.LABELS), drop_out=CFG.dropout):
+    def __init__(self, image_embedding=CFG.image_embedding, text_embedding=CFG.text_embedding, graph_embedding=CFG.graph_embedding, graph_n_classes=len(CFG.LABELS), projection_dim=CFG.projection_dim, drop_out=CFG.dropout):
         super().__init__()
         self.image_encoder = ImageEncoderTimm()
         # self.image_encoder = ImageEncoder()
-        
+
         # if image_pretrained_link is not None:
         #     pre_train_state = torch.load(image_pretrained_link)
         #     image_model_state = self.image_encoder.state_dict()
@@ -26,12 +27,8 @@ class PrescriptionPill(nn.Module):
         self.sentences_encoder = sentencesTransformer()
         self.image_projection = ProjectionHead(embedding_dim=image_embedding)
         self.text_projection = ProjectionHead(embedding_dim=text_embedding)
-
-        # self.sentences_graph_projection = ProjectionHead(embedding_dim=text_embedding + graph_embedding)
-        # an affine operation: y = Wx + b
-        self.graph_text_weight = nn.Linear(graph_embedding, text_embedding)
         self.sentences_graph_projection = ProjectionHead(
-            embedding_dim=text_embedding)
+            embedding_dim=text_embedding + graph_embedding)
 
         self.graph_post_process_layers = nn.Sequential(
             nn.BatchNorm1d(256, affine=False),
@@ -40,9 +37,9 @@ class PrescriptionPill(nn.Module):
             nn.GELU()
         )
 
-    def forward_graph(self, data):
+    def forward_graph(self, data, sentences_feature):
         # Getting graph embedding
-        graph_features = self.graph_encoder(data, self.sentences_encoder(data.text_sentences_ids, data.text_sentences_mask))
+        graph_features = self.graph_encoder(data, sentences_feature)
         # FOR KIE
         graph_extract = self.graph_post_process_layers(graph_features)
         graph_extract = F.log_softmax(graph_extract, dim=-1)
@@ -53,23 +50,18 @@ class PrescriptionPill(nn.Module):
         x = self.image_projection(x)
         return x
 
-    def forward_matching_graph(self, data, image):
-        image_features = self.get_image_features(image)
-        sentences_features = self.sentences_encoder(data.text_sentences_ids, data.text_sentences_mask)
-        graph_extract, graph_features = self.forward_graph(data)
+    def forward(self, data):
+        image_projection = self.get_image_features(data.pills_images)
 
-        # W * a + b
-        sentences_graph_features = sentences_features + self.graph_text_weight(graph_features)
-        sentences_graph_features = self.sentences_graph_projection(sentences_graph_features)
-
-        return image_features, sentences_graph_features, graph_extract
-
-    # For Only Text - Image
-    def get_sentences_features(self, data):
-        x = self.sentences_encoder(
+        sentences_feature = self.sentences_encoder(
             data.text_sentences_ids, data.text_sentences_mask)
-        x = self.text_projection(x)
-        return x
+        # sentences_projection = self.text_projection(sentences_feature)
+        graph_extract, graph_features = self.forward_graph(
+            data, sentences_feature)
 
-    def forward(self, data, pills_image):
-        return self.get_image_features(pills_image), self.get_sentences_features(data)
+        sentences_graph_features = torch.cat(
+            (sentences_feature, graph_features), dim=1)
+        sentences_graph_features = self.sentences_graph_projection(
+            sentences_graph_features)
+
+        return image_projection, sentences_graph_features, graph_extract

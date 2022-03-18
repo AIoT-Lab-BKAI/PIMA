@@ -124,10 +124,10 @@ class PrescriptionPillData(Dataset):
         pills_loader = torch.utils.data.DataLoader(pills_image_folder, batch_size=32, shuffle=True)
         
         pills_images = []
-        pills_labels = []
+        pills_images_labels = []
         for images, labels in pills_loader:
             pills_images.append(images)
-            pills_labels.append(labels)
+            pills_images_labels.append(labels)
             
         # FOR PRESCRIPTIONS
         G = self.create_graph(bboxes=prescription, imgw=2000, imgh=2000, pills_class=pills_class_to_idx)
@@ -147,8 +147,7 @@ class PrescriptionPillData(Dataset):
             data.path = self.json_files[idx]
         data.pills_from_folder = pills_image_folder
         data.pills_images = pills_images[0] # Remove list
-        data.pills_labels = pills_labels[0] # Remove list
-        
+        data.pills_images_labels = pills_images_labels[0] # Remove list
         return data
 
 def get_transforms(mode="train"):

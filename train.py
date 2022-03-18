@@ -5,48 +5,11 @@ from models.prescription_pill import PrescriptionPill
 from utils.metrics import ContrastiveLoss, TripletLoss, MetricTracker
 import wandb
 import config as CFG
-from utils.utils import build_loaders, creat_batch_triplet
+from utils.utils import build_loaders, creat_batch_triplet, creat_batch_triplet_random
 from utils.option import option
 from transformers import get_linear_schedule_with_warmup
 import warnings
 warnings.filterwarnings("ignore")
-
-
-def train_old(model, train_loader, optimizer, matching_criterion, graph_criterion, epoch, lr_scheduler):
-    model.train()
-    train_loss = []
-    wandb.watch(model)
-    with tqdm(train_loader, desc=f"Train Epoch {epoch}") as train_bar:
-        # Loop through for each prescription
-        for data in train_bar:
-            data = data.cuda()
-            optimizer.zero_grad()
-            pre_loss = []
-            
-            pills_loader = torch.utils.data.DataLoader(data.pills_from_folder[0], batch_size=8, shuffle=True)
-            for images, labels in pills_loader:
-                images = images.cuda()
-                labels = labels.cuda()
-
-                image_features, sentences_graph_features, graph_extract = model.forward_matching_graph(data, images)
-                # get graph feature
-                graph_loss = graph_criterion(graph_extract, data.y)
-                text_embedding_drugname = sentences_graph_features[data.pills_label >= 0]
-                text_embedding_labels = data.pills_label[data.pills_label >= 0]
-                
-                anchor, positive, negative = creat_batch_triplet(image_features, text_embedding_drugname, text_embedding_labels, labels)
-
-                loss = matching_criterion(anchor, positive, negative) + graph_loss
-                loss.backward()
-                optimizer.step()
-                pre_loss.append(loss.item())
-                
-            lr_scheduler.step()
-
-            train_loss.append(sum(pre_loss) / len(pre_loss))
-            train_bar.set_postfix(loss=train_loss[-1])
-
-    return sum(train_loss) / len(train_loss)
 
 
 def train(model, train_loader, optimizer, matching_criterion, graph_criterion, epoch, lr_scheduler):
@@ -59,27 +22,30 @@ def train(model, train_loader, optimizer, matching_criterion, graph_criterion, e
             data = data.cuda()
             optimizer.zero_grad()
             pre_loss = []
-                        
-            print(data.pills_images.shape)
-            image_features, sentences_graph_features, graph_extract = model.forward_matching_graph(data, data.pills_images)
-            # # get graph feature
+
+            image_features, sentences_graph_features, graph_extract = model(
+                data)
+            # get graph feature
             graph_loss = graph_criterion(graph_extract, data.y)
+
             text_embedding_drugname = sentences_graph_features[data.pills_label >= 0]
             text_embedding_labels = data.pills_label[data.pills_label >= 0]
-            
-            anchor, positive, negative = creat_batch_triplet(image_features, text_embedding_drugname, text_embedding_labels, data.pills_labels)
+            anchor, positive, negative = creat_batch_triplet(
+                image_features, text_embedding_drugname, text_embedding_labels, data.pills_images_labels)
 
-            loss = matching_criterion(anchor, positive, negative) + graph_loss
+            anchor_random, positive_random, negative_random = creat_batch_triplet_random(image_features, sentences_graph_features, data.pills_label, data.pills_images_labels, 1)
+
+            loss = matching_criterion(anchor, positive, negative) + graph_loss 
             loss.backward()
             optimizer.step()
             pre_loss.append(loss.item())
-                
+
             lr_scheduler.step()
             train_loss.append(sum(pre_loss) / len(pre_loss))
             train_bar.set_postfix(loss=train_loss[-1])
-            
-            # break
+
     return sum(train_loss) / len(train_loss)
+
 
 def val(model, val_loader):
     """
@@ -93,8 +59,8 @@ def val(model, val_loader):
             data = data.cuda()
 
             correct = []
-
-            image_features, sentences_graph_features, graph_extract = model.forward_matching_graph(data, data.pills_images)
+            image_features, sentences_graph_features, graph_extract = model(
+                data)
             # For Graph
             graph_predict = graph_extract.data.max(1, keepdim=True)[1]
             metric.update(graph_predict, data.y.data.view_as(graph_predict))
@@ -104,7 +70,8 @@ def val(model, val_loader):
             _, predicted = torch.max(similarity, 1)
             mapping_predicted = data.pills_label[predicted]
 
-            correct.append(mapping_predicted.eq(data.pills_labels).sum().item() / len(data.pills_labels))
+            correct.append(mapping_predicted.eq(
+                data.pills_images_labels).sum().item() / len(data.pills_images_labels))
 
             matching_acc.append(sum(correct) / len(correct))
 
@@ -122,15 +89,17 @@ def main(args):
 
     print(">>>> Preparing data...")
     train_files = glob.glob(args.train_folder + "*.json")
-    train_loader = build_loaders(train_files, mode="train", batch_size=args.train_batch_size)
+    train_loader = build_loaders(
+        train_files, mode="train", batch_size=args.train_batch_size)
 
     val_files = glob.glob(args.val_folder + "*.json")
-    val_loader = build_loaders(val_files, mode="test", batch_size=args.val_batch_size)
+    val_loader = build_loaders(
+        val_files, mode="test", batch_size=args.val_batch_size)
 
     # Print data information
     print("Train files: ", len(train_files))
     print("Val files: ", len(val_files))
-    
+
     print(">>>> Preparing model...")
     model = PrescriptionPill().cuda()
 
@@ -144,22 +113,27 @@ def main(args):
     graph_criterion = torch.nn.NLLLoss(weight=class_weights)
 
     # Define optimizer
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=5e-4)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=args.lr, weight_decay=5e-4)
     t_total = len(train_loader) * args.epochs
-    lr_scheduler = get_linear_schedule_with_warmup(optimizer=optimizer, num_warmup_steps=1000, num_training_steps=t_total)
+    lr_scheduler = get_linear_schedule_with_warmup(
+        optimizer=optimizer, num_warmup_steps=1000, num_training_steps=t_total)
 
     best_accuracy = 0
     print(">>>> Training...")
     for epoch in range(1, args.epochs + 1):
-        train_loss = train(model, train_loader, optimizer, matching_criterion, graph_criterion, epoch, lr_scheduler)
+        train_loss = train(model, train_loader, optimizer,
+                           matching_criterion, graph_criterion, epoch, lr_scheduler)
         print(">>>> Train Validation...")
+        # break
         train_acc = val(model, train_loader)
         print("Train accuracy: ", train_acc)
         print(">>>> Test Validation...")
         val_acc = val(model, val_loader)
         print("Val accuracy: ", val_acc)
 
-    #     wandb.log({"train_loss": train_loss,"train_acc": train_acc, "val_acc": val_acc})
+        wandb.log({"train_loss": train_loss,
+                  "train_acc": train_acc, "val_acc": val_acc})
     #     # if val_acc > best_accuracy:
     #     #     best_accuracy = val_acc
     #     #     print(">>>> Saving model...")
@@ -169,7 +143,7 @@ def main(args):
 if __name__ == '__main__':
     parse_args = option()
 
-    wandb.init(entity="aiotlab", project="VAIPE-Pills-Prescription-Matching", group="Graph", mode="disabled",
+    wandb.init(entity="aiotlab", project="VAIPE-Pills-Prescription-Matching", group="Graph", #mode="disabled",
                config={
                    "train_batch_size": parse_args.train_batch_size,
                    "val_batch_size": parse_args.val_batch_size,
@@ -177,7 +151,7 @@ if __name__ == '__main__':
                    "lr": parse_args.lr,
                    "seed": parse_args.seed
                })
-    
+
     args = wandb.config
     wandb.define_metric("val_acc", summary="max")
     main(parse_args)

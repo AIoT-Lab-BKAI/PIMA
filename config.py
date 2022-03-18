@@ -1,11 +1,10 @@
 LABELS = ['drugname', 'other']
-labels_weight = [0.9, 0.1]
+labels_weight = [0.99, 0.01]
 
 # Text_embedding Config
 text_embedding = 768
-text_encoder_model = "bert-base-cased"
 text_pretrained = True
-text_trainable = False
+text_trainable = True
 
 # Graph
 graph_embedding = 256
@@ -24,6 +23,5 @@ image_embedding = 2048
 image_batch_size = 16
 
 # For projection head; used for both image and graph encoder
-num_projection_layers = 1
 projection_dim = 256
 dropout = 0.2

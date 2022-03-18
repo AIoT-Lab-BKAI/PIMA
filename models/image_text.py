@@ -22,5 +22,5 @@ class ImageTextMatching(nn.Module):
         x = self.text_projection(x)
         return x
 
-    def forward(self, data, pills_image):
-        return self.get_image_features(pills_image), self.get_sentences_features(data)
+    def forward(self, data):
+        return self.get_image_features(data.pills_images), self.get_sentences_features(data)

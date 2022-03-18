@@ -4,7 +4,7 @@ from tqdm import tqdm
 from models.image_text import ImageTextMatching
 from utils.metrics import ContrastiveLoss, TripletLoss
 import wandb
-from utils.utils import build_loaders, creat_batch_triplet
+from utils.utils import build_loaders, creat_batch_triplet, creat_batch_triplet_random
 from utils.option import option
 from transformers import get_linear_schedule_with_warmup
 import warnings
@@ -16,34 +16,26 @@ def train(model, train_loader, optimizer, matching_criterion, epoch, lr_schedule
     train_loss = []
     wandb.watch(model)
     with tqdm(train_loader, desc=f"Train Epoch {epoch}") as train_bar:
-        # Loop through for each prescription
         for data in train_bar:
             data = data.cuda()
-
             optimizer.zero_grad()
-
             pre_loss = []
-            pills_loader = torch.utils.data.DataLoader(
-                data.pills_from_folder[0], batch_size=8, shuffle=True, num_workers=4)
 
-            for images, labels in pills_loader:
-                images = images.cuda()
-                labels = labels.cuda()
+            image_features, sentences_features = model(data)
 
-                image_features, sentences_graph_features = model(data, images)
+            text_embedding_drugnames = sentences_features[data.pills_label >= 0]
+            text_embedding_drugnames_labels = data.pills_label[data.pills_label >= 0]
+            anchor, positive, negative = creat_batch_triplet(
+                image_features, text_embedding_drugnames, text_embedding_drugnames_labels, data.pills_images_labels)
 
-                text_embedding_drugname = sentences_graph_features[data.pills_label >= 0]
-                text_embedding_labels = data.pills_label[data.pills_label >= 0]
-                anchor, positive, negative = creat_batch_triplet(
-                    image_features, text_embedding_drugname, text_embedding_labels, labels)
+            # anchor, positive, negative = creat_batch_triplet_random(image_features, sentences_features, data.pills_label, data.pills_images_labels, 1)
 
-                loss = matching_criterion(anchor, positive, negative)
-                loss.backward()
+            loss = matching_criterion(anchor, positive, negative)
+            loss.backward()
+            optimizer.step()
+            pre_loss.append(loss.item())
 
-                optimizer.step()
-                pre_loss.append(loss.item())
-                lr_scheduler.step()
-
+            lr_scheduler.step()
             train_loss.append(sum(pre_loss) / len(pre_loss))
             train_bar.set_postfix(loss=train_loss[-1])
 
@@ -51,34 +43,25 @@ def train(model, train_loader, optimizer, matching_criterion, epoch, lr_schedule
 
 
 def val(model, val_loader):
-    """
-    Summary: Test with all text embedding
-    """
     model.eval()
     matching_acc = []
     with torch.no_grad():
         for data in tqdm(val_loader, desc="Validation"):
             data = data.cuda()
-
             correct = []
-            pills_loader = torch.utils.data.DataLoader(
-                data.pills_from_folder[0], batch_size=8, shuffle=True, num_workers=4)
-            for images, labels in pills_loader:
-                images = images.cuda()
-                labels = labels.cuda()
+            image_features, sentences_features = model(data)
+            # For Matching
+            similarity = image_features @ sentences_features.t()
+            _, predicted = torch.max(similarity, 1)
+            mapping_predicted = data.pills_label[predicted]
 
-                image_features, sentences_graph_features = model(data, images)
+            correct.append(mapping_predicted.eq(
+                data.pills_images_labels).sum().item() / len(data.pills_images_labels))
 
-                # For Matching
-                similarity = image_features @ sentences_graph_features.t()
-                _, predicted = torch.max(similarity, 1)
-                mapping_predicted = data.pills_label[predicted]
-
-                correct.append(mapping_predicted.eq(
-                    labels).sum().item() / len(labels))
             matching_acc.append(sum(correct) / len(correct))
 
     final_accuracy = sum(matching_acc) / len(matching_acc)
+
     return final_accuracy
 
 
@@ -87,7 +70,6 @@ def main(args):
     torch.cuda.manual_seed_all(args.seed)
 
     print(">>>> Preparing data...")
-    # Load data
     train_files = glob.glob(args.train_folder + "*.json")
     train_loader = build_loaders(
         train_files, mode="train", batch_size=args.train_batch_size)
@@ -121,11 +103,10 @@ def main(args):
     for epoch in range(1, args.epochs + 1):
         train_loss = train(model, train_loader, optimizer,
                            matching_criterion, epoch, lr_scheduler)
-
         print(">>>> Train Validation...")
+        # break
         train_acc = val(model, train_loader)
         print("Train accuracy: ", train_acc)
-
         print(">>>> Test Validation...")
         val_acc = val(model, val_loader)
         print("Val accuracy: ", val_acc)
@@ -149,8 +130,8 @@ if __name__ == '__main__':
                    "lr": parse_args.lr,
                    "seed": parse_args.seed
                })
-    args = wandb.config
 
+    args = wandb.config
     wandb.define_metric("val_acc", summary="max")
     main(parse_args)
     wandb.finish()
