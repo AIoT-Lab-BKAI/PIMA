@@ -6,12 +6,11 @@ from utils.metrics import ContrastiveLoss, TripletLoss
 import wandb
 from utils.utils import build_loaders, creat_batch_triplet, creat_batch_triplet_random
 from utils.option import option
-from transformers import get_linear_schedule_with_warmup
 import warnings
 warnings.filterwarnings("ignore")
 
 
-def train(model, train_loader, optimizer, matching_criterion, epoch, lr_scheduler):
+def train(model, train_loader, optimizer, matching_criterion, epoch):
     model.train()
     train_loss = []
     wandb.watch(model)
@@ -23,19 +22,18 @@ def train(model, train_loader, optimizer, matching_criterion, epoch, lr_schedule
 
             image_features, sentences_features = model(data)
 
-            text_embedding_drugnames = sentences_features[data.pills_label >= 0]
-            text_embedding_drugnames_labels = data.pills_label[data.pills_label >= 0]
-            anchor, positive, negative = creat_batch_triplet(
-                image_features, text_embedding_drugnames, text_embedding_drugnames_labels, data.pills_images_labels)
+            # text_embedding_drugnames = sentences_features[data.pills_label >= 0]
+            # text_embedding_drugnames_labels = data.pills_label[data.pills_label >= 0]
+            # anchor, positive, negative = creat_batch_triplet(image_features, text_embedding_drugnames, text_embedding_drugnames_labels, data.pills_images_labels)
 
-            # anchor, positive, negative = creat_batch_triplet_random(image_features, sentences_features, data.pills_label, data.pills_images_labels, 1)
+            anchor, positive, negative = creat_batch_triplet_random(
+                image_features, sentences_features, data.pills_label, data.pills_images_labels, 0.2)
 
             loss = matching_criterion(anchor, positive, negative)
             loss.backward()
             optimizer.step()
             pre_loss.append(loss.item())
 
-            lr_scheduler.step()
             train_loss.append(sum(pre_loss) / len(pre_loss))
             train_bar.set_postfix(loss=train_loss[-1])
 
@@ -83,7 +81,7 @@ def main(args):
     print("Val files: ", len(val_files))
 
     print(">>>> Preparing model...")
-    model = ImageTextMatching().cuda()
+    model = ImageTextMatching(args).cuda()
 
     print(">>>> Preparing optimizer...")
     if args.matching_criterion == "ContrastiveLoss":
@@ -94,15 +92,12 @@ def main(args):
     # Define optimizer
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=args.lr, weight_decay=5e-4)
-    t_total = len(train_loader) * args.epochs
-    lr_scheduler = get_linear_schedule_with_warmup(
-        optimizer=optimizer, num_warmup_steps=1000, num_training_steps=t_total)
 
     best_accuracy = 0
     print(">>>> Training...")
     for epoch in range(1, args.epochs + 1):
         train_loss = train(model, train_loader, optimizer,
-                           matching_criterion, epoch, lr_scheduler)
+                           matching_criterion, epoch)
         print(">>>> Train Validation...")
         # break
         train_acc = val(model, train_loader)
@@ -122,7 +117,7 @@ def main(args):
 if __name__ == '__main__':
     parse_args = option()
 
-    wandb.init(entity="aiotlab", project="VAIPE-Pills-Prescription-Matching", group="Non-Graph",
+    wandb.init(entity="aiotlab", project="VAIPE-Pills-Prescription-Matching", group="Matching-All", name=parse_args.run_name,
                config={
                    "train_batch_size": parse_args.train_batch_size,
                    "val_batch_size": parse_args.val_batch_size,

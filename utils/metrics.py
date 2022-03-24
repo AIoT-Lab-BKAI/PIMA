@@ -15,11 +15,11 @@ class MetricTracker:
         self.preds.append(preds)
         self.targets.append(targets)
 
-    def compute(self):
+    def compute(self, mode=False):
         preds = torch.cat(self.preds).cpu().numpy()
         targets = torch.cat(self.targets).cpu().numpy()
         return classification_report(targets, preds,
-                                     target_names=self.target_names, zero_division=0)
+                                     target_names=self.target_names, zero_division=0, output_dict=mode)
 
     def reset(self):
         self.preds = []
@@ -27,7 +27,7 @@ class MetricTracker:
 
 
 class TripletLoss(nn.Module):
-    def __init__(self, margin=1.0):
+    def __init__(self, margin=2.0):
         super(TripletLoss, self).__init__()
         self.margin = margin
         self.cos = nn.CosineSimilarity(dim=-1, eps=1e-6)

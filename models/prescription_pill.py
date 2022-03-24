@@ -1,17 +1,16 @@
 from torch import nn
 import torch.nn.functional as F
-
-import config as CFG
 from models import ImageEncoder, ProjectionHead, ImageEncoderTimm, sentencesTransformer, SBERTxSAGE
 import torch
 
 
 class PrescriptionPill(nn.Module):
-    def __init__(self, image_embedding=CFG.image_embedding, text_embedding=CFG.text_embedding, graph_embedding=CFG.graph_embedding, graph_n_classes=len(CFG.LABELS), projection_dim=CFG.projection_dim, drop_out=CFG.dropout):
+    def __init__(self, args):
         super().__init__()
-        self.image_encoder = ImageEncoderTimm()
-        # self.image_encoder = ImageEncoder()
+        self.image_encoder = ImageEncoderTimm(image_model_name=args.image_model_name,
+                                              image_pretrained=args.image_pretrained, image_trainable=args.image_trainable)
 
+        # self.image_encoder = ImageEncoder()
         # if image_pretrained_link is not None:
         #     pre_train_state = torch.load(image_pretrained_link)
         #     image_model_state = self.image_encoder.state_dict()
@@ -23,17 +22,24 @@ class PrescriptionPill(nn.Module):
         #     self.image_encoder.load_state_dict(image_model_state)
         #     print("Loaded pretrained image model successfully!")
 
-        self.graph_encoder = SBERTxSAGE()
+        self.graph_encoder = SBERTxSAGE(
+            input_dim=args.text_embedding, output_dim=args.graph_embedding, dropout_rate=args.drop_out)
+
         self.sentences_encoder = sentencesTransformer()
-        self.image_projection = ProjectionHead(embedding_dim=image_embedding)
-        self.text_projection = ProjectionHead(embedding_dim=text_embedding)
+
+        self.image_projection = ProjectionHead(
+            embedding_dim=args.image_embedding, projection_dim=args.projection_dim, dropout=args.drop_out)
+
+        self.text_projection = ProjectionHead(
+            embedding_dim=args.text_embedding, projection_dim=args.sprojection_dim, dropout=args.drop_out)
+
         self.sentences_graph_projection = ProjectionHead(
-            embedding_dim=text_embedding + graph_embedding)
+            embedding_dim=args.text_embedding + args.graph_embedding, projection_dim=args.projection_dim, dropout=args.drop_out)
 
         self.graph_post_process_layers = nn.Sequential(
             nn.BatchNorm1d(256, affine=False),
-            nn.Dropout(p=drop_out),
-            nn.Linear(256, graph_n_classes),
+            nn.Dropout(p=args.drop_out),
+            nn.Linear(256, 2),  # 2 class: Drugname / Other
             nn.GELU()
         )
 

@@ -1,15 +1,18 @@
 from torch import nn
-import config as CFG
 from models import ImageEncoder, ProjectionHead, ImageEncoderTimm, sentencesTransformer
 
 
 class ImageTextMatching(nn.Module):
-    def __init__(self, image_embedding=CFG.image_embedding, text_embedding=CFG.text_embedding):
+    def __init__(self, args):
         super().__init__()
-        self.image_encoder = ImageEncoderTimm()
-        self.sentences_encoder = sentencesTransformer()
-        self.image_projection = ProjectionHead(embedding_dim=image_embedding)
-        self.text_projection = ProjectionHead(embedding_dim=text_embedding)
+        self.image_encoder = ImageEncoderTimm(image_model_name=args.image_model_name,
+                                              image_pretrained=args.image_pretrained, image_trainable=args.image_trainable)
+        self.sentences_encoder = sentencesTransformer(
+            model_name=args.text_model_name, trainable=args.text_trainable)
+        self.image_projection = ProjectionHead(
+            embedding_dim=args.image_embedding, projection_dim=args.projection_dim, dropout=args.dropout)
+        self.text_projection = ProjectionHead(
+            embedding_dim=args.text_embedding, projection_dim=args.projection_dim, dropout=args.dropout)
 
     def get_image_features(self, image):
         x = self.image_encoder(image)

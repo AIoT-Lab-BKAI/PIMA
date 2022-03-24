@@ -1,7 +1,6 @@
 import torch
 from torch import nn
 from torchvision import models
-import config as CFG
 import timm
 from torch_geometric.nn import SAGEConv
 from transformers import AutoModel
@@ -9,11 +8,11 @@ import torch.nn.functional as F
 
 
 class SBERTxSAGE(torch.nn.Module):
-    def __init__(self, dropout_rate=0.2, hidden_size=CFG.text_embedding):
+    def __init__(self, dropout_rate, input_dim, output_dim):
         super().__init__()
-        self.hidden_size = hidden_size
+        self.hidden_size = input_dim
         self.conv1 = SAGEConv(self.hidden_size, 512)
-        self.conv2 = SAGEConv(512,  256)
+        self.conv2 = SAGEConv(512,  output_dim)
         self.dropout_rate = dropout_rate
 
     def forward(self, data, pooled_output):
@@ -26,7 +25,7 @@ class SBERTxSAGE(torch.nn.Module):
 
 
 class sentencesTransformer(torch.nn.Module):
-    def __init__(self, model_name='sentence-transformers/paraphrase-mpnet-base-v2', trainable=CFG.text_trainable):
+    def __init__(self, model_name, trainable):
         super().__init__()
 
         self.model = AutoModel.from_pretrained(model_name)
@@ -46,7 +45,7 @@ class sentencesTransformer(torch.nn.Module):
 
 
 class ImageEncoder(nn.Module):
-    def __init__(self, model_name=CFG.image_model_name, pretrained=CFG.image_pretrained, trainable=CFG.image_trainable, image_num_classes=None):
+    def __init__(self, model_name="resnet50", pretrained=False, trainable=False, image_num_classes=None):
         super().__init__()
         if model_name == "resnet50":
             self.model = models.resnet50(pretrained=pretrained)
@@ -64,13 +63,12 @@ class ImageEncoder(nn.Module):
 
 
 class ImageEncoderTimm(nn.Module):
-    def __init__(self, model_name=CFG.image_model_name, pretrained=CFG.image_pretrained, trainable=CFG.image_trainable):
+    def __init__(self, image_model_name="resnet50", image_pretrained=False, image_trainable=False):
         super().__init__()
         self.model = timm.create_model(
-            model_name, pretrained, num_classes=0, global_pool="avg"
-        )
+            image_model_name, image_pretrained, num_classes=0, global_pool="avg")
         for param in self.model.parameters():
-            param.requires_grad = trainable
+            param.requires_grad = image_trainable
 
     def forward(self, x):
         return self.model(x)
@@ -80,8 +78,8 @@ class ProjectionHead(nn.Module):
     def __init__(
         self,
         embedding_dim,
-        projection_dim=CFG.projection_dim,
-        dropout=CFG.dropout
+        projection_dim,
+        dropout=0.2
     ):
         super().__init__()
         self.projection = nn.Linear(embedding_dim, projection_dim)

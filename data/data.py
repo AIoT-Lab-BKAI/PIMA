@@ -34,7 +34,10 @@ class PrescriptionPillData(Dataset):
                 
             # FOR PILL - PRESCRIPTION
             if src_row['label'] == 'drugname':
-                pills_label = torch.tensor(pills_class[src_row['mapping']], dtype=torch.long)
+                if src_row['mapping'] not in pills_class:
+                    pills_label = torch.tensor(-1, dtype=torch.long)
+                else:
+                    pills_label = torch.tensor(pills_class[src_row['mapping']], dtype=torch.long)
             else:
                 pills_label = torch.tensor(-1, dtype=torch.long)
 
