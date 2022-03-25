@@ -30,13 +30,14 @@ def train(model, train_loader, optimizer, matching_criterion, graph_criterion, e
             text_embedding_drugname = sentences_graph_features[data.pills_label >= 0]
             text_embedding_labels = data.pills_label[data.pills_label >= 0]
 
-            anchor, positive, negative = creat_batch_triplet(
-                image_features, text_embedding_drugname, text_embedding_labels, data.pills_images_labels)
+            # anchor, positive, negative = creat_batch_triplet(
+            #     image_features, text_embedding_drugname, text_embedding_labels, data.pills_images_labels)
 
-            # anchor, positive, negative = creat_batch_triplet_random(
-            #     image_features, sentences_graph_features, data.pills_label, data.pills_images_labels, 0.5)
+            anchor, positive, negative = creat_batch_triplet_random(
+                image_features, sentences_graph_features, data.pills_label, data.pills_images_labels, 0.2)
 
-            loss = matching_criterion(anchor, positive, negative) + (1 - drugname_f1_score) * graph_loss
+            loss = matching_criterion(
+                anchor, positive, negative) + (1 - drugname_f1_score) * graph_loss
             loss.backward()
             optimizer.step()
             pre_loss.append(loss.item())
@@ -61,7 +62,7 @@ def val(model, val_loader):
             correct = []
             image_features, sentences_graph_features, graph_extract = model(
                 data)
-                
+
             # For Graph
             graph_predict = graph_extract.data.max(1, keepdim=True)[1]
             metric.update(graph_predict, data.y.data.view_as(graph_predict))
@@ -100,7 +101,7 @@ def main(args):
     print(">>>> Preparing data...")
     train_files = glob.glob(args.train_folder + "*.json")
     # get 10% of train_files
-    train_files = train_files[:int(len(train_files) * 0.1)]
+    # train_files = train_files[:int(len(train_files) * 0.1)]
 
     train_loader = build_loaders(
         train_files, mode="train", batch_size=args.train_batch_size)
@@ -133,17 +134,18 @@ def main(args):
     drugname_f1_score = 0
     print(">>>> Training...")
     for epoch in range(1, args.epochs + 1):
-        train_loss = train(model, train_loader, optimizer, matching_criterion, graph_criterion, epoch, drugname_f1_score)
+        train_loss = train(model, train_loader, optimizer,
+                           matching_criterion, graph_criterion, epoch, drugname_f1_score)
         print(">>>> Train Validation...")
         train_acc, drugname_f1_score = val(model, train_loader)
         print("Train accuracy: ", train_acc)
 
-        # print(">>>> Test Validation...")
-        # val_acc, drugname_f1_score = val(model, val_loader)
-        # print("Val accuracy: ", val_acc)
+        print(">>>> Test Validation...")
+        val_acc, drugname_f1_score = val(model, val_loader)
+        print("Val accuracy: ", val_acc)
 
-        # wandb.log({"train_loss": train_loss,
-        #           "train_acc": train_acc, "val_acc": val_acc})
+        wandb.log({"train_loss": train_loss,
+                  "train_acc": train_acc, "val_acc": val_acc})
         # if val_acc > best_accuracy:
         #     best_accuracy = val_acc
         #     print(">>>> Saving model...")
@@ -153,7 +155,7 @@ def main(args):
 if __name__ == '__main__':
     parse_args = option()
 
-    wandb.init(entity="aiotlab", project="VAIPE-Pills-Prescription-Matching", group="Graph", mode="disabled",
+    wandb.init(entity="aiotlab", project="VAIPE-Pills-Prescription-Matching", group="Graph", name=parse_args.run_name,  # mode="disabled",
                config={
                    "train_batch_size": parse_args.train_batch_size,
                    "val_batch_size": parse_args.val_batch_size,

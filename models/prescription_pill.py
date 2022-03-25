@@ -23,22 +23,23 @@ class PrescriptionPill(nn.Module):
         #     print("Loaded pretrained image model successfully!")
 
         self.graph_encoder = SBERTxSAGE(
-            input_dim=args.text_embedding, output_dim=args.graph_embedding, dropout_rate=args.drop_out)
+            input_dim=args.text_embedding, output_dim=args.graph_embedding, dropout_rate=args.dropout)
 
-        self.sentences_encoder = sentencesTransformer()
+        self.sentences_encoder = sentencesTransformer(
+            model_name=args.text_model_name, trainable=args.text_trainable)
 
         self.image_projection = ProjectionHead(
-            embedding_dim=args.image_embedding, projection_dim=args.projection_dim, dropout=args.drop_out)
+            embedding_dim=args.image_embedding, projection_dim=args.projection_dim, dropout=args.dropout)
 
         self.text_projection = ProjectionHead(
-            embedding_dim=args.text_embedding, projection_dim=args.sprojection_dim, dropout=args.drop_out)
+            embedding_dim=args.text_embedding, projection_dim=args.projection_dim, dropout=args.dropout)
 
         self.sentences_graph_projection = ProjectionHead(
-            embedding_dim=args.text_embedding + args.graph_embedding, projection_dim=args.projection_dim, dropout=args.drop_out)
+            embedding_dim=args.text_embedding + args.graph_embedding, projection_dim=args.projection_dim, dropout=args.dropout)
 
         self.graph_post_process_layers = nn.Sequential(
             nn.BatchNorm1d(256, affine=False),
-            nn.Dropout(p=args.drop_out),
+            nn.Dropout(p=args.dropout),
             nn.Linear(256, 2),  # 2 class: Drugname / Other
             nn.GELU()
         )
