@@ -28,7 +28,6 @@ def train(model, train_loader, optimizer, matching_criterion, epoch):
             anchor, positive, negative = creat_batch_triplet_random(
                 image_features, sentences_features, data.pills_label, data.pills_images_labels, 0.2)
 
-            print(anchor.shape, positive.shape, negative.shape)
             loss = matching_criterion(anchor, positive, negative)
             loss.backward()
             optimizer.step()
@@ -73,7 +72,7 @@ def main(args):
 
     train_loader = build_loaders(
         train_files, mode="train", batch_size=args.train_batch_size)
-    
+
     val_files = glob.glob(args.val_folder + "*.json")
     val_loader = build_loaders(
         val_files, mode="test", batch_size=args.val_batch_size)
@@ -119,7 +118,7 @@ def main(args):
 if __name__ == '__main__':
     parse_args = option()
 
-    wandb.init(entity="aiotlab", project="VAIPE-Pills-Prescription-Matching", group="Matching-All", name=parse_args.run_name,# mode="disabled",
+    wandb.init(entity="aiotlab", project="VAIPE-Pills-Prescription-Matching", group="Matching-All", name=parse_args.run_name,  # mode="disabled",
                config={
                    "train_batch_size": parse_args.train_batch_size,
                    "val_batch_size": parse_args.val_batch_size,
