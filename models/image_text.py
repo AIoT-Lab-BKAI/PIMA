@@ -1,4 +1,5 @@
 from torch import nn
+import torch
 from models import ImageEncoder, ProjectionHead, ImageEncoderTimm, sentencesTransformer
 
 
@@ -14,9 +15,29 @@ class ImageTextMatching(nn.Module):
         self.text_projection = ProjectionHead(
             embedding_dim=args.text_embedding, projection_dim=args.projection_dim, dropout=args.dropout)
 
+        self.W1 = nn.Linear(args.image_embedding, args.projection_dim)
+        self.W2 = nn.Linear(args.image_embedding, args.projection_dim)
+
     def get_image_features(self, image):
         x = self.image_encoder(image)
         x = self.image_projection(x)
+        return x
+
+    def get_image_aggregation(self, image, label):
+        x = self.image_encoder(image)
+        # x = Wx + W mean( \x )
+        # with all
+        # x = self.W1(x) + self.W2(x.mean(dim=0))
+
+        calculate_mean = torch.zeros(x.shape[0], x.shape[1]).cuda()
+        for idx, value in enumerate(label):
+            if sum(label != value) == 0:
+                continue
+            other_image = x[label != value].detach()
+            calculate_mean[idx, :] = other_image.mean(dim=0)
+
+        x = self.W1(x) + self.W2(calculate_mean)
+
         return x
 
     def get_sentences_features(self, data):
@@ -26,4 +47,5 @@ class ImageTextMatching(nn.Module):
         return x
 
     def forward(self, data):
-        return self.get_image_features(data.pills_images), self.get_sentences_features(data)
+        # return self.get_image_features(data.pills_images), self.get_sentences_features(data)
+        return self.get_image_aggregation(data.pills_images, data.pills_images_labels), self.get_sentences_features(data)

@@ -31,8 +31,7 @@ class PrescriptionPill(nn.Module):
         self.image_projection = ProjectionHead(
             embedding_dim=args.image_embedding, projection_dim=args.projection_dim, dropout=args.dropout)
 
-        self.text_projection = ProjectionHead(
-            embedding_dim=args.text_embedding, projection_dim=args.projection_dim, dropout=args.dropout)
+        self.graph_projection = ProjectionHead(embedding_dim=args.graph_embedding, projection_dim=args.projection_dim, dropout=args.dropout)
 
         self.sentences_graph_projection = ProjectionHead(
             embedding_dim=args.text_embedding + args.graph_embedding, projection_dim=args.projection_dim, dropout=args.dropout)
@@ -43,6 +42,10 @@ class PrescriptionPill(nn.Module):
             nn.Linear(256, 2),  # 2 class: Drugname / Other
             nn.GELU()
         )
+
+        self.W1 = nn.Linear(args.image_embedding, args.projection_dim)
+        self.W2 = nn.Linear(args.image_embedding, args.projection_dim)
+
 
     def forward_graph(self, data, sentences_feature):
         # Getting graph embedding
@@ -57,18 +60,32 @@ class PrescriptionPill(nn.Module):
         x = self.image_projection(x)
         return x
 
+    def get_image_aggregation(self, image, label):
+        x = self.image_encoder(image)
+
+        calculate_mean = torch.zeros(x.shape[0], x.shape[1]).cuda()
+        for idx, value in enumerate(label):
+            if sum(label != value) == 0:
+                continue
+            other_image = x[label != value].detach()
+            calculate_mean[idx, :] = other_image.mean(dim=0)
+
+        x = self.W1(x) + self.W2(calculate_mean)
+
+        return x
+
     def forward(self, data):
-        image_projection = self.get_image_features(data.pills_images)
+        # image_projection = self.get_image_features(data.pills_images)
+        image_projection = self.get_image_aggregation(
+            data.pills_images, data.pills_images_labels)
 
         sentences_feature = self.sentences_encoder(
             data.text_sentences_ids, data.text_sentences_mask)
-        # sentences_projection = self.text_projection(sentences_feature)
+
         graph_extract, graph_features = self.forward_graph(
             data, sentences_feature)
 
-        sentences_graph_features = torch.cat(
-            (sentences_feature, graph_features), dim=1)
-        sentences_graph_features = self.sentences_graph_projection(
-            sentences_graph_features)
+        sentences_graph_features = torch.cat((sentences_feature, graph_features), dim=1)
+        sentences_graph_features = self.sentences_graph_projection(sentences_graph_features)
 
         return image_projection, sentences_graph_features, graph_extract
