@@ -116,11 +116,11 @@ def main(args):
     # train_files = train_files[:int(len(train_files) * 0.1)]
 
     train_loader = build_loaders(
-        train_files, mode="train", batch_size=args.train_batch_size)
+        train_files, mode="train", batch_size=args.train_batch_size, sentences_tokenizer=args.text_model_name)
 
     val_files = glob.glob(args.val_folder + "*.json")
     val_loader = build_loaders(
-        val_files, mode="test", batch_size=args.val_batch_size)
+        val_files, mode="test", batch_size=args.val_batch_size, sentences_tokenizer=args.text_model_name)
 
     # Print data information
     print("Train files: ", len(train_files))

@@ -3,8 +3,9 @@ from torch_geometric.data import DataLoader
 import torch
 import math
 
-def build_loaders(files, mode="train", batch_size=1):
-    dataset = PrescriptionPillData(files, mode)
+
+def build_loaders(files, mode="train", batch_size=1, sentences_tokenizer="sentence-transformers/paraphrase-mpnet-base-v2"):
+    dataset = PrescriptionPillData(files, mode, sentences_tokenizer)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,

@@ -1,0 +1,1 @@
+python3 -u train.py --run-name="Resnet18-2-Match-Multilingual" --image-model-name="resnet18" --image-embedding=512 --image-trainable=True --image-pretrained=False --matching-criterion="ContrastiveLoss" --text-model-name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2" --text-embedding=384

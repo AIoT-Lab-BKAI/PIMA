@@ -15,9 +15,8 @@ import matplotlib.pyplot as plt
 
 
 class PrescriptionPillData(Dataset):
-    def __init__(self, json_files, mode):
-        self.text_sentences_tokenizer = AutoTokenizer.from_pretrained(
-            'sentence-transformers/paraphrase-mpnet-base-v2')
+    def __init__(self, json_files, mode, sentences_tokenizer):
+        self.text_sentences_tokenizer = AutoTokenizer.from_pretrained(sentences_tokenizer)
         self.json_files = json_files
         self.mode = mode
         self.transforms = get_transforms(self.mode)
@@ -144,7 +143,8 @@ class PrescriptionPillData(Dataset):
             pills_images.append(images)
             pills_images_labels.append(labels)
 
-        pills_images_labels = [self.all_pill_labels[pills_idx_to_class[item]] for item in pills_images_labels[0].tolist()]
+        pills_images_labels = [self.all_pill_labels[pills_idx_to_class[item]]
+                               for item in pills_images_labels[0].tolist()]
 
         # FOR PRESCRIPTIONS
         G = self.create_graph(bboxes=prescription, imgw=2000,
