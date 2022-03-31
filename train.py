@@ -10,8 +10,26 @@ from utils.option import option
 import warnings
 warnings.filterwarnings("ignore")
 
+def create_triplet_graph(image_all_projection, graph_projection, data):
+    anchor, positive, negative = torch.tensor([]).cuda(), torch.tensor([]).cuda(), torch.tensor([]).cuda()
 
-def train(model, train_loader, optimizer, matching_criterion, graph_criterion, epoch, drugname_f1_score):
+    graph_projection_drugname = graph_projection[data.y == 0]
+    graph_projection_other = graph_projection[data.y == 1]
+
+    anchor = image_all_projection
+    positive = graph_projection_drugname
+    negative = graph_projection_other
+
+    # for data in graph_projection_drugname:
+    #     anchor = torch.cat((anchor, image_all_projection.unsqueeze(0)))
+    #     positive = torch.cat((positive, data.unsqueeze(0).unsqueeze(0)))
+    #     negative = torch.cat((negative, graph_projection_other.unsqueeze(0)))
+    
+    return anchor, positive, negative
+
+
+
+def train(model, train_loader, optimizer, matching_criterion, graph_criterion, epoch):
     model.train()
     train_loss = []
     wandb.watch(model)
@@ -22,22 +40,22 @@ def train(model, train_loader, optimizer, matching_criterion, graph_criterion, e
             optimizer.zero_grad()
             pre_loss = []
 
-            image_features, sentences_graph_features, graph_extract = model(
-                data)
-            # get graph feature
-            graph_loss = graph_criterion(graph_extract, data.y)
+            image_aggregation, image_all_projection, sentences_projection, graph_projection = model(data)
 
-            text_embedding_drugname = sentences_graph_features[data.pills_label >= 0]
-            text_embedding_labels = data.pills_label[data.pills_label >= 0]
+            ### Create for Image matching Drugname
+            sentences_embedding_drugname = sentences_projection[data.pills_label >= 0]
+            sentences_labels_drugname = data.pills_label[data.pills_label >= 0]
 
-            # anchor, positive, negative = creat_batch_triplet(
-            #     image_features, text_embedding_drugname, text_embedding_labels, data.pills_images_labels)
+            matching_anchor, matching_positive, matching_negative = creat_batch_triplet(image_aggregation, sentences_embedding_drugname, sentences_labels_drugname, data.pills_images_labels)
 
-            anchor, positive, negative = creat_batch_triplet_random(
-                image_features, sentences_graph_features, data.pills_label, data.pills_images_labels, 0.2)
+            matching_loss = matching_criterion(matching_anchor, matching_positive, matching_negative)
 
-            loss = matching_criterion(
-                anchor, positive, negative) + (1 - drugname_f1_score) * graph_loss
+            ### Create for Image matching Graph 
+            graph_anchor, graph_positive, graph_negative = create_triplet_graph(image_all_projection, graph_projection, data)
+            graph_loss = graph_criterion(graph_anchor, graph_positive, graph_negative)
+
+            loss = matching_loss + graph_loss
+
             loss.backward()
             optimizer.step()
             pre_loss.append(loss.item())
@@ -52,7 +70,6 @@ def val(model, val_loader):
     """
     Summary: Test with all text embedding
     """
-    metric = MetricTracker(labels=CFG.LABELS)
     model.eval()
     matching_acc = []
     with torch.no_grad():
@@ -60,12 +77,11 @@ def val(model, val_loader):
             data = data.cuda()
 
             correct = []
-            image_features, sentences_graph_features, graph_extract = model(
-                data)
+            image_aggregation, image_all_projection, sentences_projection, graph_projection = model(data)
 
             # For Graph
-            graph_predict = graph_extract.data.max(1, keepdim=True)[1]
-            metric.update(graph_predict, data.y.data.view_as(graph_predict))
+            # graph_predict = graph_extract.data.max(1, keepdim=True)[1]
+            # metric.update(graph_predict, data.y.data.view_as(graph_predict))
 
             ######
             # text_embedding_drugname = sentences_graph_features[data.pills_label >= 0]
@@ -76,7 +92,7 @@ def val(model, val_loader):
             ####
 
             # For Matching
-            similarity = image_features @ sentences_graph_features.t()
+            similarity = image_aggregation @ sentences_projection.t() + image_all_projection @ graph_projection.t()
             _, predicted = torch.max(similarity, 1)
             mapping_predicted = data.pills_label[predicted]
 
@@ -87,11 +103,7 @@ def val(model, val_loader):
 
     final_accuracy = sum(matching_acc) / len(matching_acc)
 
-    gcn_report = metric.compute(mode=True)
-    drugname_f1_score = gcn_report['drugname']['f1-score']
-    print(metric.compute())
-
-    return final_accuracy, drugname_f1_score
+    return final_accuracy
 
 
 def main(args):
@@ -123,25 +135,23 @@ def main(args):
     elif args.matching_criterion == "TripletLoss":
         matching_criterion = TripletLoss()
 
-    class_weights = torch.FloatTensor(CFG.labels_weight).cuda()
-    graph_criterion = torch.nn.NLLLoss(weight=class_weights)
+    graph_criterion = ContrastiveLoss()
 
     # Define optimizer
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=args.lr, weight_decay=5e-4)
 
     best_accuracy = 0
-    drugname_f1_score = 0
     print(">>>> Training...")
     for epoch in range(1, args.epochs + 1):
         train_loss = train(model, train_loader, optimizer,
-                           matching_criterion, graph_criterion, epoch, drugname_f1_score)
+                           matching_criterion, graph_criterion, epoch)
         print(">>>> Train Validation...")
-        train_acc, drugname_f1_score = val(model, train_loader)
+        train_acc = val(model, train_loader)
         print("Train accuracy: ", train_acc)
 
         print(">>>> Test Validation...")
-        val_acc, drugname_f1_score = val(model, val_loader)
+        val_acc = val(model, val_loader)
         print("Val accuracy: ", val_acc)
 
         wandb.log({"train_loss": train_loss,
@@ -155,7 +165,7 @@ def main(args):
 if __name__ == '__main__':
     parse_args = option()
 
-    wandb.init(entity="aiotlab", project="VAIPE-Pills-Prescription-Matching", group="Graph", name=parse_args.run_name,  # mode="disabled",
+    wandb.init(entity="aiotlab", project="VAIPE-Pills-Prescription-Matching", group="Graph", name=parse_args.run_name,  #mode="disabled",
                config={
                    "train_batch_size": parse_args.train_batch_size,
                    "val_batch_size": parse_args.val_batch_size,

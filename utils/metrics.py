@@ -62,7 +62,7 @@ class ContrastiveLoss(nn.Module):
         distance_positive = self.calc_cosinsimilarity(anchor, positive)
         distance_negative = self.calc_cosinsimilarity(anchor, negative)
 
-        loss_contrastive = torch.pow(
-            distance_negative, 2) + torch.pow(torch.relu(self.margin - distance_positive), 2)
+        loss_contrastive = torch.mean(torch.pow(
+            distance_negative, 2)) + torch.mean(torch.pow(torch.relu(self.margin - distance_positive), 2))
 
         return torch.mean(loss_contrastive)
