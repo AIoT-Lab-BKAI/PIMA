@@ -5,28 +5,20 @@ from models.prescription_pill import PrescriptionPill
 from utils.metrics import ContrastiveLoss, TripletLoss, MetricTracker
 import wandb
 import config as CFG
-from utils.utils import build_loaders, creat_batch_triplet, creat_batch_triplet_random
+from utils.utils import build_loaders, creat_batch_triplet, creat_batch_triplet_random, calculate_matching_loss
 from utils.option import option
 import warnings
 warnings.filterwarnings("ignore")
 
-def create_triplet_graph(image_all_projection, graph_projection, data):
-    anchor, positive, negative = torch.tensor([]).cuda(), torch.tensor([]).cuda(), torch.tensor([]).cuda()
 
+def create_triplet_graph(image_all_projection, graph_projection, data):
     graph_projection_drugname = graph_projection[data.y == 0]
     graph_projection_other = graph_projection[data.y == 1]
 
     anchor = image_all_projection
     positive = graph_projection_drugname
     negative = graph_projection_other
-
-    # for data in graph_projection_drugname:
-    #     anchor = torch.cat((anchor, image_all_projection.unsqueeze(0)))
-    #     positive = torch.cat((positive, data.unsqueeze(0).unsqueeze(0)))
-    #     negative = torch.cat((negative, graph_projection_other.unsqueeze(0)))
-    
     return anchor, positive, negative
-
 
 
 def train(model, train_loader, optimizer, matching_criterion, graph_criterion, epoch):
@@ -42,15 +34,13 @@ def train(model, train_loader, optimizer, matching_criterion, graph_criterion, e
 
             image_aggregation, image_all_projection, sentences_projection, graph_projection = model(data)
 
-            ### Create for Image matching Drugname
+            # Create for Image matching Drugname
             sentences_embedding_drugname = sentences_projection[data.pills_label >= 0]
             sentences_labels_drugname = data.pills_label[data.pills_label >= 0]
 
-            matching_anchor, matching_positive, matching_negative = creat_batch_triplet(image_aggregation, sentences_embedding_drugname, sentences_labels_drugname, data.pills_images_labels)
+            matching_loss = calculate_matching_loss(image_aggregation, sentences_embedding_drugname, sentences_labels_drugname, data.pills_images_labels, matching_criterion)
 
-            matching_loss = matching_criterion(matching_anchor, matching_positive, matching_negative)
-
-            ### Create for Image matching Graph 
+            # Create for Image matching Graph
             graph_anchor, graph_positive, graph_negative = create_triplet_graph(image_all_projection, graph_projection, data)
             graph_loss = graph_criterion(graph_anchor, graph_positive, graph_negative)
 
@@ -165,7 +155,7 @@ def main(args):
 if __name__ == '__main__':
     parse_args = option()
 
-    wandb.init(entity="aiotlab", project="VAIPE-Pills-Prescription-Matching", group="Graph", name=parse_args.run_name,  #mode="disabled",
+    wandb.init(entity="aiotlab", project="VAIPE-Pills-Prescription-Matching", group="Graph", name=parse_args.run_name, # mode="disabled",
                config={
                    "train_batch_size": parse_args.train_batch_size,
                    "val_batch_size": parse_args.val_batch_size,

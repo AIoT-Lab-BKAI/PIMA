@@ -16,7 +16,8 @@ import matplotlib.pyplot as plt
 
 class PrescriptionPillData(Dataset):
     def __init__(self, json_files, mode, sentences_tokenizer):
-        self.text_sentences_tokenizer = AutoTokenizer.from_pretrained(sentences_tokenizer)
+        self.text_sentences_tokenizer = AutoTokenizer.from_pretrained(
+            sentences_tokenizer)
         self.json_files = json_files
         self.mode = mode
         self.transforms = get_transforms(self.mode)
@@ -160,13 +161,10 @@ class PrescriptionPillData(Dataset):
         text_sentences = self.text_sentences_tokenizer(
             data.text, max_length=32, padding='max_length', truncation=True, return_tensors='pt')
         data.text_sentences_ids, data.text_sentences_mask = text_sentences.input_ids, text_sentences.attention_mask
-        data.bbox = torch.Tensor(data.bbox)
 
-        if isinstance(self.json_files[idx], str):
-            data.path = self.json_files[idx]
-        data.pills_from_folder = pills_image_folder
-        data.pills_images = pills_images[0]  # Remove list
+        data.pills_images = pills_images[0]
         data.pills_images_labels = torch.Tensor(pills_images_labels)
+        data.pills_images_labels_idx = torch.ones_like(data.pills_images_labels, dtype=int) * idx
         return data
 
 
