@@ -1,1 +1,0 @@
-python3 -u train_matching_all.py --run-name="Pretrain-Resnet18-20%" --image-model-name="resnet18" --image-embedding=512 --image-trainable=True --image-pretrained=True --matching-criterion="ContrastiveLoss"
