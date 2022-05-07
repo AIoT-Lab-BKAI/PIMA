@@ -29,7 +29,7 @@ def option():
     parser.add_argument('--val-batch-size', type=int, default=1)
 
     # Hyperparameters
-    parser.add_argument('--epochs', type=int, default=50)
+    parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--lr', type=float, default=5e-5)
 
     # Model

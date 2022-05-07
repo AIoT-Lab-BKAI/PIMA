@@ -2,10 +2,9 @@ import glob
 import torch
 from tqdm import tqdm
 from models.prescription_pill import PrescriptionPill
-from utils.metrics import ContrastiveLoss, TripletLoss, MetricTracker
+from utils.metrics import ContrastiveLoss, TripletLoss
 import wandb
-import config as CFG
-from utils.utils import build_loaders, creat_batch_triplet, creat_batch_triplet_random, calculate_matching_loss
+from utils.utils import build_loaders, calculate_matching_loss
 from utils.option import option
 import warnings
 warnings.filterwarnings("ignore")
@@ -32,17 +31,21 @@ def train(model, train_loader, optimizer, matching_criterion, graph_criterion, e
             optimizer.zero_grad()
             pre_loss = []
 
-            image_aggregation, image_all_projection, sentences_projection, graph_projection = model(data)
+            image_aggregation, image_all_projection, sentences_projection, graph_projection = model(
+                data)
 
             # Create for Image matching Drugname
             sentences_embedding_drugname = sentences_projection[data.pills_label >= 0]
             sentences_labels_drugname = data.pills_label[data.pills_label >= 0]
 
-            matching_loss = calculate_matching_loss(image_aggregation, sentences_embedding_drugname, sentences_labels_drugname, data.pills_images_labels, matching_criterion)
+            matching_loss = calculate_matching_loss(
+                image_aggregation, sentences_embedding_drugname, sentences_labels_drugname, data.pills_images_labels, matching_criterion)
 
             # Create for Image matching Graph
-            graph_anchor, graph_positive, graph_negative = create_triplet_graph(image_all_projection, graph_projection, data)
-            graph_loss = graph_criterion(graph_anchor, graph_positive, graph_negative)
+            graph_anchor, graph_positive, graph_negative = create_triplet_graph(
+                image_all_projection, graph_projection, data)
+            graph_loss = graph_criterion(
+                graph_anchor, graph_positive, graph_negative)
 
             loss = matching_loss + graph_loss
 
@@ -67,22 +70,12 @@ def val(model, val_loader):
             data = data.cuda()
 
             correct = []
-            image_aggregation, image_all_projection, sentences_projection, graph_projection = model(data)
-
-            # For Graph
-            # graph_predict = graph_extract.data.max(1, keepdim=True)[1]
-            # metric.update(graph_predict, data.y.data.view_as(graph_predict))
-
-            ######
-            # text_embedding_drugname = sentences_graph_features[data.pills_label >= 0]
-            # text_embedding_labels = data.pills_label[data.pills_label >= 0]
-            # similarity = image_features @ text_embedding_drugname.t()
-            # _, predicted = torch.max(similarity, 1)
-            # mapping_predicted = text_embedding_labels[predicted]
-            ####
+            image_aggregation, image_all_projection, sentences_projection, graph_projection = model(
+                data)
 
             # For Matching
-            similarity = image_aggregation @ sentences_projection.t() + image_all_projection @ graph_projection.t()
+            similarity = image_aggregation @ sentences_projection.t() + \
+                image_all_projection @ graph_projection.t()
             _, predicted = torch.max(similarity, 1)
             mapping_predicted = data.pills_label[predicted]
 
@@ -102,13 +95,13 @@ def main(args):
 
     print(">>>> Preparing data...")
     train_files = glob.glob(args.train_folder + "*.json")
-    # get 10% of train_files
-    # train_files = train_files[:int(len(train_files) * 0.1)]
+    val_files = glob.glob(args.val_folder + "*.json")
 
     train_loader = build_loaders(
         train_files, mode="train", batch_size=args.train_batch_size, sentences_tokenizer=args.text_model_name)
+    train_val_loader = build_loaders(
+        train_files, mode="test", batch_size=args.val_batch_size, sentences_tokenizer=args.text_model_name)
 
-    val_files = glob.glob(args.val_folder + "*.json")
     val_loader = build_loaders(
         val_files, mode="test", batch_size=args.val_batch_size, sentences_tokenizer=args.text_model_name)
 
@@ -122,10 +115,10 @@ def main(args):
     print(">>>> Preparing optimizer...")
     if args.matching_criterion == "ContrastiveLoss":
         matching_criterion = ContrastiveLoss()
+        graph_criterion = ContrastiveLoss()
     elif args.matching_criterion == "TripletLoss":
         matching_criterion = TripletLoss()
-
-    graph_criterion = ContrastiveLoss()
+        graph_criterion = TripletLoss()
 
     # Define optimizer
     optimizer = torch.optim.AdamW(
@@ -137,15 +130,15 @@ def main(args):
         train_loss = train(model, train_loader, optimizer,
                            matching_criterion, graph_criterion, epoch)
         print(">>>> Train Validation...")
-        train_acc = val(model, train_loader)
-        print("Train accuracy: ", train_acc)
+        train_val_acc = val(model, train_val_loader)
+        print("Train accuracy: ", train_val_acc)
 
         print(">>>> Test Validation...")
         val_acc = val(model, val_loader)
         print("Val accuracy: ", val_acc)
 
-        wandb.log({"train_loss": train_loss,
-                  "train_acc": train_acc, "val_acc": val_acc})
+        wandb.log({"train_loss": train_loss,"train_acc": train_val_acc, "val_acc": val_acc})
+
         # if val_acc > best_accuracy:
         #     best_accuracy = val_acc
         #     print(">>>> Saving model...")
@@ -155,7 +148,7 @@ def main(args):
 if __name__ == '__main__':
     parse_args = option()
 
-    wandb.init(entity="aiotlab", project="VAIPE-Pills-Prescription-Matching", group="Graph", name=parse_args.run_name, # mode="disabled",
+    wandb.init(entity="aiotlab", project="VAIPE-Pills-Prescription-Matching", group="Graph", name=parse_args.run_name,  # mode="disabled",
                config={
                    "train_batch_size": parse_args.train_batch_size,
                    "val_batch_size": parse_args.val_batch_size,
