@@ -4,8 +4,8 @@ import torch
 import math
 
 
-def build_loaders(files, mode="train", batch_size=1, sentences_tokenizer="sentence-transformers/paraphrase-mpnet-base-v2"):
-    dataset = PrescriptionPillData(files, mode, sentences_tokenizer)
+def build_loaders(files, mode="train", batch_size=1, args=None):
+    dataset = PrescriptionPillData(files, mode, args)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -15,23 +15,29 @@ def build_loaders(files, mode="train", batch_size=1, sentences_tokenizer="senten
 
 
 def creat_batch_triplet(image_aggregation, text_embedding_drugname, text_embedding_labels, pills_images_labels):
-    anchor, positive, negative = torch.tensor([]).cuda(), torch.tensor([]).cuda(), torch.tensor([]).cuda()
+    anchor, positive, negative = torch.tensor([]).cuda(
+    ), torch.tensor([]).cuda(), torch.tensor([]).cuda()
 
     for idx, label in enumerate(pills_images_labels):
         positive_idx = text_embedding_labels.eq(label)
         negative_idx = text_embedding_labels.ne(label)
 
-        anchor = torch.cat((anchor, image_aggregation[idx].unsqueeze(0).unsqueeze(0)))
-        positive = torch.cat((positive, text_embedding_drugname[positive_idx].unsqueeze(0)))
+        anchor = torch.cat(
+            (anchor, image_aggregation[idx].unsqueeze(0).unsqueeze(0)))
+        positive = torch.cat(
+            (positive, text_embedding_drugname[positive_idx].unsqueeze(0)))
 
         if sum(negative_idx) == 0:
-            negative = torch.cat((negative, torch.zeros_like(image_aggregation[idx]).unsqueeze(0).unsqueeze(0)))
+            negative = torch.cat((negative, torch.zeros_like(
+                image_aggregation[idx]).unsqueeze(0).unsqueeze(0)))
         else:
-            negative = torch.cat((negative, text_embedding_drugname[negative_idx].unsqueeze(0)))
+            negative = torch.cat(
+                (negative, text_embedding_drugname[negative_idx].unsqueeze(0)))
 
     return anchor, positive, negative
 
-def calculate_matching_loss(image_aggregation, text_embedding_drugname, text_embedding_labels, pills_images_labels, matching_criterion):
+
+def calculate_matching_loss(image_aggregation, text_embedding_drugname, text_embedding_labels, pills_images_labels, matching_criterion, negative_ratio=None):
 
     loss = []
     for idx, label in enumerate(pills_images_labels):
@@ -42,10 +48,14 @@ def calculate_matching_loss(image_aggregation, text_embedding_drugname, text_emb
         positive = text_embedding_drugname[positive_idx]
         negative = text_embedding_drugname[negative_idx]
 
+        if negative_ratio is not None:
+            # get random negative samples
+            negative = negative[torch.randperm(
+                len(negative))[:math.ceil(len(negative) * negative_ratio)]]
+
         loss.append(matching_criterion(anchor, positive, negative))
 
     return torch.mean(torch.stack(loss))
-
 
 
 def creat_batch_triplet_random(image_features, text_embedding_drugname, text_embedding_labels, pills_images_labels, ratio=0.2):
@@ -75,12 +85,3 @@ def creat_batch_triplet_random(image_features, text_embedding_drugname, text_emb
 
     # print(anchor.shape, positive.shape, negative.shape)
     return anchor, positive, negative
-
-
-# create tensor size [10, 256]
-# image_features = torch.randn(5, 256).cuda()
-# text_embedding_drugname = torch.randn(4, 256).cuda()
-# text_embedding_labels = torch.tensor([1, 1, 0, -2, -1]).cuda()
-# pills_images_labels = torch.tensor([1, 0, 1, 0, 1]).cuda()
-# creat_batch_triplet_random(image_features, text_embedding_drugname,
-#                            text_embedding_labels, pills_images_labels, 0.2)

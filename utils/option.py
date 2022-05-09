@@ -16,14 +16,15 @@ def option():
     parser.add_argument('--cuda', type=bool, default=torch.cuda.is_available())
 
     # Data Init
+    parser.add_argument('--data-folder', type=str, default='data/')
     parser.add_argument('--train-folder', type=str,
-                        default="data/prescriptions/train/")
+                        default="prescriptions/train/")
     parser.add_argument('--val-folder', type=str,
-                        default="data/prescriptions/test/")
+                        default="prescriptions/test/")
 
-    parser.add_argument('--image-path', type=str, default="data/pills/")
+    parser.add_argument('--image-path', type=str, default="pills/")
     parser.add_argument('--depth', type=int, default=3)
-    parser.add_argument('--size', type=int, default=224)
+    parser.add_argument('--image-size', type=int, default=224)
 
     parser.add_argument('--train-batch-size', type=int, default=1)
     parser.add_argument('--val-batch-size', type=int, default=1)
@@ -59,6 +60,7 @@ def option():
     # matching
     parser.add_argument('--matching-criterion', type=str,
                         default="ContrastiveLoss")
+    parser.add_argument('--negative-ratio', type=float, default=None)
 
     # Model Save
     parser.add_argument('--save-model', type=bool, default=False)

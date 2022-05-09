@@ -1,7 +1,7 @@
 import glob
 import torch
 from tqdm import tqdm
-from models.prescription_pill import PrescriptionPill
+from models.image_text import ImageTextMatching
 from utils.metrics import ContrastiveLoss, TripletLoss
 import wandb
 from utils.utils import build_loaders, calculate_matching_loss
@@ -10,44 +10,20 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-def create_triplet_graph(image_all_projection, graph_projection, data):
-    graph_projection_drugname = graph_projection[data.y == 0]
-    graph_projection_other = graph_projection[data.y == 1]
-
-    anchor = image_all_projection
-    positive = graph_projection_drugname
-    negative = graph_projection_other
-    return anchor, positive, negative
-
-
-def train(model, train_loader, optimizer, matching_criterion, graph_criterion, epoch):
+def train(model, train_loader, optimizer, matching_criterion, epoch, negative_ratio=None):
     model.train()
     train_loss = []
     wandb.watch(model)
     with tqdm(train_loader, desc=f"Train Epoch {epoch}") as train_bar:
-        # Loop through for each prescription
         for data in train_bar:
             data = data.cuda()
             optimizer.zero_grad()
             pre_loss = []
 
-            image_aggregation, image_all_projection, sentences_projection, graph_projection = model(
-                data)
+            image_features, sentences_features = model(data)
 
-            # Create for Image matching Drugname
-            sentences_embedding_drugname = sentences_projection[data.pills_label >= 0]
-            sentences_labels_drugname = data.pills_label[data.pills_label >= 0]
-
-            matching_loss = calculate_matching_loss(
-                image_aggregation, sentences_embedding_drugname, sentences_labels_drugname, data.pills_images_labels, matching_criterion)
-
-            # Create for Image matching Graph
-            graph_anchor, graph_positive, graph_negative = create_triplet_graph(
-                image_all_projection, graph_projection, data)
-            graph_loss = graph_criterion(
-                graph_anchor, graph_positive, graph_negative)
-
-            loss = matching_loss + graph_loss
+            loss = calculate_matching_loss(
+                image_features, sentences_features, data.pills_label, data.pills_images_labels, matching_criterion, negative_ratio)
 
             loss.backward()
             optimizer.step()
@@ -60,22 +36,15 @@ def train(model, train_loader, optimizer, matching_criterion, graph_criterion, e
 
 
 def val(model, val_loader):
-    """
-    Summary: Test with all text embedding
-    """
     model.eval()
     matching_acc = []
     with torch.no_grad():
         for data in tqdm(val_loader, desc="Validation"):
             data = data.cuda()
-
             correct = []
-            image_aggregation, image_all_projection, sentences_projection, graph_projection = model(
-                data)
-
+            image_features, sentences_features = model(data)
             # For Matching
-            similarity = image_aggregation @ sentences_projection.t() + \
-                image_all_projection @ graph_projection.t()
+            similarity = image_features @ sentences_features.t()
             _, predicted = torch.max(similarity, 1)
             mapping_predicted = data.pills_label[predicted]
 
@@ -99,6 +68,7 @@ def main(args):
 
     train_loader = build_loaders(
         train_files, mode="train", batch_size=args.train_batch_size, args=args)
+
     train_val_loader = build_loaders(
         train_files, mode="train", batch_size=args.val_batch_size, args=args)
 
@@ -110,15 +80,13 @@ def main(args):
     print("Val files: ", len(val_files))
 
     print(">>>> Preparing model...")
-    model = PrescriptionPill(args).cuda()
+    model = ImageTextMatching(args).cuda()
 
     print(">>>> Preparing optimizer...")
     if args.matching_criterion == "ContrastiveLoss":
         matching_criterion = ContrastiveLoss()
-        graph_criterion = ContrastiveLoss()
     elif args.matching_criterion == "TripletLoss":
         matching_criterion = TripletLoss()
-        graph_criterion = TripletLoss()
 
     # Define optimizer
     optimizer = torch.optim.AdamW(
@@ -128,18 +96,17 @@ def main(args):
     print(">>>> Training...")
     for epoch in range(1, args.epochs + 1):
         train_loss = train(model, train_loader, optimizer,
-                           matching_criterion, graph_criterion, epoch)
+                           matching_criterion, epoch, negative_ratio=args.negative_ratio)
         print(">>>> Train Validation...")
+        # break
         train_val_acc = val(model, train_val_loader)
         print("Train accuracy: ", train_val_acc)
-
         print(">>>> Test Validation...")
         val_acc = val(model, val_loader)
         print("Val accuracy: ", val_acc)
 
         wandb.log({"train_loss": train_loss,
                   "train_acc": train_val_acc, "val_acc": val_acc})
-
         # if val_acc > best_accuracy:
         #     best_accuracy = val_acc
         #     print(">>>> Saving model...")
@@ -149,7 +116,7 @@ def main(args):
 if __name__ == '__main__':
     parse_args = option()
 
-    wandb.init(entity="aiotlab", project="VAIPE-Pills-Prescription-Matching", group="Graph-PP_02", name=parse_args.run_name, # mode="disabled",
+    wandb.init(entity="aiotlab", project="VAIPE-Pills-Prescription-Matching", group="Text-Matching", name=parse_args.run_name,  # mode="disabled",
                config={
                    "train_batch_size": parse_args.train_batch_size,
                    "val_batch_size": parse_args.val_batch_size,

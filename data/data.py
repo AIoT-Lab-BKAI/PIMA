@@ -15,13 +15,15 @@ import matplotlib.pyplot as plt
 
 
 class PrescriptionPillData(Dataset):
-    def __init__(self, json_files, mode, sentences_tokenizer):
+    def __init__(self, json_files, mode, args):
+        self.args = args
         self.text_sentences_tokenizer = AutoTokenizer.from_pretrained(
-            sentences_tokenizer)
+            args.text_model_name)
         self.json_files = json_files
         self.mode = mode
-        self.transforms = get_transforms(self.mode)
-        self.all_pill_labels = get_all_pill_label("data/all_imgs/train")
+        self.transforms = get_transforms(self.mode, args.image_size)
+        self.all_pill_labels = get_all_pill_label(
+            args.data_folder + "all_imgs/train")
 
     def create_graph(self, bboxes, imgw, imgh, pills_class):
         G = nx.Graph()
@@ -128,7 +130,8 @@ class PrescriptionPillData(Dataset):
         # FOR IMAGE PILLS
         pills_image_folder_name = self.json_files[idx].split(
             "/")[-1].split(".")[0]
-        pills_image_path = CFG.image_path + self.mode + "/" + pills_image_folder_name
+        pills_image_path = self.args.data_folder + self.args.image_path + \
+            self.mode + "/" + pills_image_folder_name
         pills_image_folder = torchvision.datasets.ImageFolder(
             pills_image_path, transform=self.transforms)
         pills_class_to_idx = pills_image_folder.class_to_idx
@@ -164,19 +167,20 @@ class PrescriptionPillData(Dataset):
 
         data.pills_images = pills_images[0]
         data.pills_images_labels = torch.Tensor(pills_images_labels)
-        data.pills_images_labels_idx = torch.ones_like(data.pills_images_labels, dtype=int) * idx
+        data.pills_images_labels_idx = torch.ones_like(
+            data.pills_images_labels, dtype=int) * idx
         return data
 
 
-def get_transforms(mode="train"):
+def get_transforms(mode="train", size=224):
     if mode == "train":
-        transform = transforms.Compose([transforms.Resize((CFG.size, CFG.size)),
+        transform = transforms.Compose([transforms.Resize((size, size)),
                                         transforms.RandomRotation(10),
                                         transforms.RandomHorizontalFlip(),
                                         transforms.ToTensor(),
                                         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     else:
-        transform = transforms.Compose([transforms.Resize((CFG.size, CFG.size)),
+        transform = transforms.Compose([transforms.Resize((size, size)),
                                         transforms.ToTensor(),
                                         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     return transform
