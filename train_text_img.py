@@ -45,6 +45,11 @@ def val(model, val_loader):
             image_features, sentences_features = model(data)
             # For Matching
             similarity = image_features @ sentences_features.t()
+            similarity = torch.nn.functional.softmax(similarity, dim=1)
+            # where > 0.5
+            similarity = torch.where(similarity > 0.8, similarity, torch.zeros_like(similarity))
+            # print(similarity)
+    
             _, predicted = torch.max(similarity, 1)
             mapping_predicted = data.pills_label[predicted]
 
@@ -105,8 +110,6 @@ def main(args):
         val_acc = val(model, val_loader)
         print("Val accuracy: ", val_acc)
 
-        wandb.log({"train_loss": train_loss,
-                  "train_acc": train_val_acc, "val_acc": val_acc})
         # if val_acc > best_accuracy:
         #     best_accuracy = val_acc
         #     print(">>>> Saving model...")

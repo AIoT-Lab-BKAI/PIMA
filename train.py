@@ -76,6 +76,10 @@ def val(model, val_loader):
             # For Matching
             similarity = image_aggregation @ sentences_projection.t() + \
                 image_all_projection @ graph_projection.t()
+            similarity = torch.nn.functional.softmax(similarity, dim=1)
+            # where > 0.5
+            similarity = torch.where(similarity > 0.8, similarity, torch.zeros_like(similarity))
+            
             _, predicted = torch.max(similarity, 1)
             mapping_predicted = data.pills_label[predicted]
 
