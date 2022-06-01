@@ -109,11 +109,9 @@ def main(args):
         print(">>>> Test Validation...")
         val_acc = val(model, val_loader)
         print("Val accuracy: ", val_acc)
-
-        # if val_acc > best_accuracy:
-        #     best_accuracy = val_acc
-        #     print(">>>> Saving model...")
-        #     torch.save(model.state_dict(), args.save_folder + "best_model.pth")
+        
+        wandb.log({"train_loss": train_loss,
+                  "train_acc": train_val_acc, "val_acc": val_acc})
 
 
 if __name__ == '__main__':
