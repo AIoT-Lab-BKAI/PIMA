@@ -51,12 +51,16 @@ class ImageEncoder(nn.Module):
             self.model = models.resnet50(pretrained=pretrained)
             for param in self.model.parameters():
                 param.requires_grad = trainable
-
-        if image_num_classes is not None:
-            self.model.fc = nn.Linear(
-                self.model.fc.in_features, image_num_classes)
-        else:
-            self.model.fc = nn.Identity()
+            if image_num_classes is not None:
+                self.model.fc = nn.Linear(
+                    self.model.fc.in_features, image_num_classes)
+            else:
+                self.model.fc = nn.Identity()
+        elif model_name == "mobilenet_v3_small":
+            self.model = models.mobilenet_v3_small(pretrained=pretrained)
+            for param in self.model.parameters():
+                param.requires_grad = trainable
+            self.classifier = nn.Identity()
 
     def forward(self, x):
         return self.model(x)

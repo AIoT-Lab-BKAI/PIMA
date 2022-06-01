@@ -47,7 +47,7 @@ def val(model, val_loader):
             similarity = image_features @ sentences_features.t()
             similarity = torch.nn.functional.softmax(similarity, dim=1)
             # where > 0.5
-            similarity = torch.where(similarity > 0.8, similarity, torch.zeros_like(similarity))
+            # similarity = torch.where(similarity > 0.8, similarity, torch.zeros_like(similarity))
             # print(similarity)
     
             _, predicted = torch.max(similarity, 1)

@@ -41,16 +41,11 @@ def train(model, train_loader, optimizer, matching_criterion, graph_criterion, e
                 image_aggregation, sentences_embedding_drugname, sentences_labels_drugname, data.pills_images_labels, matching_criterion)
 
             # Create for Image matching Graph
-            # graph_anchor, graph_positive, graph_negative = create_triplet_graph(
-            #     image_all_projection, graph_projection, data)
-            
-            # print(graph_anchor.shape, graph_positive.shape, graph_negative.shape)
-            
-            # graph_loss = graph_criterion(
-            #     graph_anchor, graph_positive, graph_negative)
-            
-            graph_loss = calculate_matching_loss(
-                image_all_projection, graph_projection, data.pills_label, data.pills_images_labels, graph_criterion)
+            graph_anchor, graph_positive, graph_negative = create_triplet_graph(
+                image_all_projection, graph_projection, data)
+                        
+            graph_loss = graph_criterion(
+                graph_anchor, graph_positive, graph_negative)
 
             loss = matching_loss + graph_loss
 

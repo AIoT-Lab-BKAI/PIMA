@@ -7,8 +7,10 @@ import torch
 class PrescriptionPill(nn.Module):
     def __init__(self, args):
         super().__init__()
-        self.image_encoder = ImageEncoderTimm(image_model_name=args.image_model_name,
-                                              image_pretrained=args.image_pretrained, image_trainable=args.image_trainable)
+        # self.image_encoder = ImageEncoderTimm(image_model_name=args.image_model_name,
+        #                                       image_pretrained=args.image_pretrained, image_trainable=args.image_trainable)
+        self.image_encoder = ImageEncoder(model_name=args.image_model_name,
+                                              pretrained=args.image_pretrained, trainable=args.image_trainable)
 
         self.graph_encoder = SBERTxSAGE(
             input_dim=args.text_embedding, output_dim=args.graph_embedding, dropout_rate=args.dropout)
@@ -96,7 +98,8 @@ class PrescriptionPill(nn.Module):
         # IMAGE
         image_aggregation = self.get_image_aggregation(data.pills_images, data.pills_images_labels, data.pills_images_labels_idx)
                 
-        image_all_projection = self.get_image_aggregation_all_version_2(data.pills_images, data.pills_images_labels, data.pills_images_labels_idx)
+        # image_all_projection = self.get_image_aggregation_all_version_2(data.pills_images, data.pills_images_labels, data.pills_images_labels_idx)
+        image_all_projection = self.get_image_aggregation_all(data.pills_images)
 
         # TEXT
         sentences_feature = self.sentences_encoder(
