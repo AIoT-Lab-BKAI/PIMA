@@ -65,5 +65,6 @@ def option():
     # Model Save
     parser.add_argument('--save-model', type=bool, default=False)
     parser.add_argument('--save-folder', type=str, default="logs/saved/")
+    parser.add_argument('--run-group', type=str, default="")
 
     return parser.parse_args()
