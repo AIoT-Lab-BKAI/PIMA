@@ -10,10 +10,15 @@ data/VAIPE-PP_01
 data/VAIPE-PP_02
 data/VAIPE-PP_03
 data/VAIPE-PP_04
+data/VAIPE-PP_05
+data/VAIPE-PP_06
 data/data_processing
 data/VAIPE-PP_01.zip
 data/VAIPE-PP_02.zip
 data/VAIPE-PP_03.zip
+data/VAIPE-PP_04.zip
+data/VAIPE-PP_05.zip
+data/VAIPE-PP_06.zip
 logs
 logs/saved
 vis
