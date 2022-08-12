@@ -1,0 +1,2 @@
+CUDA_VISIBLE_DEVICES=1 python3 -u inference.py  --image-model-name="mobilenet_v3_small" --image-embedding=1000 --image-trainable=True --image-pretrained=True  --text-model-name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2" --text-embedding=384 --val-batch-size=1 --data-folder="/mnt/disk1/vaipe-thanhnt/EMED-Prescription-and-Pill-matching/data_inference/data/"
+ 

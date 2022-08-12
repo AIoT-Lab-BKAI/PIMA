@@ -24,6 +24,9 @@ class PrescriptionPillData(Dataset):
         self.transforms = get_transforms(self.mode, args.image_size)
         self.all_pill_labels = get_all_pill_label(
             args.data_folder + "all_imgs/train")
+        
+        # with open("/mnt/disk1/vaipe-thanhnt/EMED-Prescription-and-Pill-matching/logs/confusion/confusion_label.json", "w") as f:
+        #     json.dump(self.all_pill_labels, f)
 
     def create_graph(self, bboxes, imgw, imgh, pills_class):
         G = nx.Graph()
