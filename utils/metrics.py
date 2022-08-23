@@ -15,11 +15,11 @@ class MetricTracker:
         self.preds.append(preds)
         self.targets.append(targets)
 
-    def compute(self):
+    def compute(self, mode=False):
         preds = torch.cat(self.preds).cpu().numpy()
         targets = torch.cat(self.targets).cpu().numpy()
         return classification_report(targets, preds,
-                                     target_names=self.target_names, zero_division=0)
+                                     target_names=self.target_names, zero_division=0, output_dict=mode)
 
     def reset(self):
         self.preds = []
@@ -39,8 +39,8 @@ class TripletLoss(nn.Module):
         distance_positive = self.calc_cosinsimilarity(anchor, positive)
         distance_negative = self.calc_cosinsimilarity(anchor, negative)
 
-        losses = torch.relu(- distance_positive +
-                            distance_negative + self.margin)
+        losses = torch.relu(- torch.mean(distance_positive) +
+                            torch.mean(distance_negative) + self.margin)
 
         return losses.mean()
 
@@ -62,7 +62,7 @@ class ContrastiveLoss(nn.Module):
         distance_positive = self.calc_cosinsimilarity(anchor, positive)
         distance_negative = self.calc_cosinsimilarity(anchor, negative)
 
-        loss_contrastive = torch.pow(
-            distance_negative, 2) + torch.pow(torch.relu(self.margin - distance_positive), 2)
+        loss_contrastive = torch.mean(torch.pow(
+            distance_negative, 2)) + torch.mean(torch.pow(torch.relu(self.margin - distance_positive), 2))
 
         return torch.mean(loss_contrastive)

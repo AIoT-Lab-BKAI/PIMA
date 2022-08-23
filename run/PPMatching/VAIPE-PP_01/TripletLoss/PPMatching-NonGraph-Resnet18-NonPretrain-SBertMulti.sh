@@ -1,0 +1,1 @@
+python3 -u train_text_img.py --run-name="PPMatching-NonGraph-Resnet18-NonPretrain-SBertMulti" --image-model-name="resnet18" --image-embedding=512 --image-trainable=True --image-pretrained=False --matching-criterion="TripletLoss" --text-model-name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2" --text-embedding=384 --train-batch-size=4 --val-batch-size=1
