@@ -1,6 +1,6 @@
-# EMED-Prescription-and-Pill-matching
+# PIMA - A Novel Approach for Pill-Prescription Matching with GNN Assistance and Contrastive Learning
 
-Hướng dẫn cài đặt ENV 
+ENV Installation Guide
 
 ```
 1. conda create -n thanhnt_vaipe -c defaults -c pytorch -c conda-forge -c rusty1s pytorch-geometric
