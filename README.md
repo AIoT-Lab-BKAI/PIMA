@@ -6,12 +6,14 @@ Trung Thanh Nguyen, Hoang Dang Nguyen, Thanh Hung Nguyen, Huy Hieu Pham, Ichiro 
 Full paper is available [here](https://github.com/AIoT-Lab-BKAI/PIMA/tree/main/paper).
 
 ---
-ENV Installation Guide
+Environment setting using [Anaconda](https://www.anaconda.com/).
 
 ```
-1. conda create -n thanhnt_vaipe -c defaults -c pytorch -c conda-forge -c rusty1s pytorch-geometric
-2. pip install transformers
-3. pip install torchvision
-4. pip install timm
-5. pip install wandb
+conda create --name pima
+conda install pytorch torchvision torchaudio pytorch-cuda=11.6 -c pytorch -c nvidia
+conda install pyg -c pyg
+conda install -c conda-forge transformers
+conda install -c conda-forge timm
+conda install -c anaconda networkx
+conda install -c conda-forge wandb
 ```
